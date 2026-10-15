@@ -1,0 +1,2 @@
+package com.partapp.partservice.persistence.entity; import java.time.Instant; import java.util.UUID; import com.baomidou.mybatisplus.annotation.*;
+@TableName("rating") public class RatingEntity { @TableId public UUID id; @TableField("topic_id") public UUID topicId; @TableField("from_user_id") public UUID fromUserId; @TableField("to_user_id") public UUID toUserId; public String score; public String comment; @TableField("created_at") public Instant createdAt; }

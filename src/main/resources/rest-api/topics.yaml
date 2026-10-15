@@ -1,0 +1,251 @@
+openapi: 3.0.3
+info:
+  title: Part Service API - Topics
+  version: 1.0.0
+servers:
+- url: /api/v1
+tags:
+- name: Topics
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    topicId:
+      name: topicId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+        description: 主题 ID
+      description: 主题 ID
+  responses:
+    TopicResponse:
+      description: Topic
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResponseTopic'
+    TopicsResponse:
+      description: Paged topics
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResponseTopics'
+  schemas:
+    ApiResponseTopic:
+      allOf:
+      - $ref: ./components.yaml#/components/schemas/ApiResponse
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/Topic'
+            description: 业务数据
+      description: ApiResponseTopic字段
+    ApiResponseTopics:
+      allOf:
+      - $ref: ./components.yaml#/components/schemas/ApiResponse
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/PageOfTopics'
+            description: 业务数据
+      description: ApiResponseTopics字段
+    InviteRequest:
+      type: object
+      required:
+      - userId
+      properties:
+        userId:
+          type: string
+          format: uuid
+          description: user ID字段
+      description: InviteRequest字段
+    PageOfTopics:
+      allOf:
+      - $ref: ./components.yaml#/components/schemas/Page
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Topic'
+          description: 列表数据
+      description: PageOfTopics字段
+    Topic:
+      type: object
+      required:
+      - id
+      - publisherId
+      - communityId
+      - title
+      - detail
+      - genders
+      - status
+      - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 唯一标识
+        publisherId:
+          type: string
+          format: uuid
+          description: 主题发布者 ID
+        communityId:
+          type: string
+          format: uuid
+          description: 社区 ID
+        title:
+          type: string
+          description: 主题标题
+        detail:
+          type: string
+          description: 主题详细内容
+        minAge:
+          type: integer
+          nullable: true
+          description: 最小年龄
+        maxAge:
+          type: integer
+          nullable: true
+          description: 最大年龄
+        genders:
+          type: array
+          items:
+            type: string
+          description: 允许的性别列表
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: 主题过期时间
+        status:
+          type: string
+          description: 当前状态
+        createdAt:
+          type: string
+          format: date-time
+          description: 创建时间
+      description: Topic字段
+    TopicRequest:
+      type: object
+      required:
+      - title
+      - detail
+      properties:
+        title:
+          type: string
+          maxLength: 80
+          description: 主题标题
+        detail:
+          type: string
+          description: 主题详细内容
+        minAge:
+          type: integer
+          description: 最小年龄
+        maxAge:
+          type: integer
+          description: 最大年龄
+        genders:
+          type: array
+          items:
+            type: string
+          description: 允许的性别列表
+        expiresAt:
+          type: string
+          format: date-time
+          description: 主题过期时间
+      description: TopicRequest字段
+paths:
+  /topics:
+    get:
+      tags:
+      - Topics
+      operationId: listTopics
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: ./components.yaml#/components/parameters/status
+      - $ref: ./components.yaml#/components/parameters/cursor
+      - $ref: ./components.yaml#/components/parameters/limit
+      responses:
+        '200':
+          $ref: '#/components/responses/TopicsResponse'
+    post:
+      tags:
+      - Topics
+      operationId: createTopic
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TopicRequest'
+        description: 请求参数
+      responses:
+        '200':
+          $ref: '#/components/responses/TopicResponse'
+  /topics/{topicId}:
+    parameters:
+    - $ref: '#/components/parameters/topicId'
+    get:
+      tags:
+      - Topics
+      operationId: getTopic
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          $ref: '#/components/responses/TopicResponse'
+    patch:
+      tags:
+      - Topics
+      operationId: updateTopic
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TopicRequest'
+        description: 请求参数
+      responses:
+        '200':
+          $ref: '#/components/responses/TopicResponse'
+  /topics/{topicId}/close:
+    post:
+      tags:
+      - Topics
+      operationId: closeTopic
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/topicId'
+      responses:
+        '200':
+          $ref: '#/components/responses/TopicResponse'
+  /topics/{topicId}/invite:
+    post:
+      tags:
+      - Topics
+      operationId: inviteUser
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/topicId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InviteRequest'
+        description: 请求参数
+      responses:
+        '200':
+          $ref: ./components.yaml#/components/responses/InvitationResponse

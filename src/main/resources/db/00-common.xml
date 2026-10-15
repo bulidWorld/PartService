@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<database name="part-service" source="00-common.xml" dialect="postgresql">
+  <extensions>
+    <extension name="pgcrypto" if-not-exists="true" />
+  </extensions>
+  <tables>
+    <table name="audit_log" if-not-exists="true" comment="审计日志">
+      <columns>
+        <column name="id" type="uuid" nullable="false" default="gen_random_uuid()" comment="主键 ID" />
+        <column name="request_id" type="varchar(64)" nullable="false" comment="请求 ID" />
+        <column name="actor_user_id" type="uuid" nullable="true" comment="执行操作的用户 ID" />
+        <column name="action" type="varchar(64)" nullable="false" comment="操作类型" />
+        <column name="resource_type" type="varchar(32)" nullable="false" comment="资源类型" />
+        <column name="resource_id" type="uuid" nullable="true" comment="资源 ID" />
+        <column name="detail" type="jsonb" nullable="false" default="'{}'::jsonb" comment="详细内容" />
+        <column name="ip" type="inet" nullable="true" comment="客户端 IP 地址" />
+        <column name="created_at" type="timestamptz" nullable="false" default="now()" comment="创建时间" />
+      </columns>
+      <constraints>
+        <primary-key name="pk_audit_log" columns="created_at,id" />
+        <foreign-key name="fk_audit_log_actor_user" columns="actor_user_id"
+          references-table="user" references-columns="id" />
+      </constraints>
+      <indexes>
+        <index name="idx_audit_log_actor_created" unique="false" method="btree" if-not-exists="true">
+          <column name="actor_user_id" order="ASC" />
+          <column name="created_at" order="DESC" />
+        </index>
+        <index name="idx_audit_log_resource_created" unique="false" method="btree"
+          if-not-exists="true">
+          <column name="resource_type" order="ASC" />
+          <column name="resource_id" order="ASC" />
+          <column name="created_at" order="DESC" />
+        </index>
+        <index name="idx_audit_log_request_id" unique="false" method="btree" if-not-exists="true">
+          <column name="request_id" order="ASC" />
+        </index>
+      </indexes>
+      <partition-by method="RANGE" columns="created_at" />
+    </table>
+  </tables>
+</database>

@@ -1,0 +1,19 @@
+# Generated OpenAPI sources and metadata
+/src/main/java/com/partapp/partservice/web/generated/
+/.openapi-generator/
+
+# Build output and runtime files
+/target/
+/run/
+*.log
+__pycache__/
+*.py[cod]
+
+# Local editor and environment settings
+/.vscode/
+/.idea/
+*.iml
+.env
+.env.*
+!.env.example
+.DS_Store

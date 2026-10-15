@@ -1,0 +1,140 @@
+openapi: 3.0.3
+info:
+  title: Part Service API - Users
+  version: 1.0.0
+servers:
+- url: /api/v1
+tags:
+- name: Users
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters: {}
+  responses:
+    CommunitiesResponse:
+      description: Available communities
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResponseCommunities'
+    UserResponse:
+      description: User profile
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResponseUser'
+  schemas:
+    ApiResponseCommunities:
+      allOf:
+      - $ref: ./components.yaml#/components/schemas/ApiResponse
+      - type: object
+        properties:
+          data:
+            type: array
+            items:
+              $ref: '#/components/schemas/Community'
+            description: 业务数据
+      description: ApiResponseCommunities字段
+    ApiResponseUser:
+      allOf:
+      - $ref: ./components.yaml#/components/schemas/ApiResponse
+      - type: object
+        properties:
+          data:
+            $ref: ./components.yaml#/components/schemas/User
+            description: 业务数据
+      description: ApiResponseUser字段
+    CommunityRequest:
+      type: object
+      required:
+      - communityId
+      properties:
+        communityId:
+          type: string
+          format: uuid
+          description: 社区 ID
+      description: CommunityRequest字段
+    ProfileRequest:
+      type: object
+      properties:
+        nickname:
+          type: string
+          description: 用户昵称
+        gender:
+          type: string
+          description: 性别
+        birthDate:
+          type: string
+          format: date
+          description: 出生日期
+        avatarUrl:
+          type: string
+          format: uri
+          description: 头像地址
+      description: ProfileRequest字段
+    Community:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 唯一标识
+        name:
+          type: string
+          description: name字段
+      description: Community字段
+paths:
+  /me:
+    get:
+      tags:
+      - Users
+      operationId: getCurrentUser
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          $ref: '#/components/responses/UserResponse'
+    patch:
+      tags:
+      - Users
+      operationId: updateCurrentUser
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileRequest'
+        description: 请求参数
+      responses:
+        '200':
+          $ref: '#/components/responses/UserResponse'
+  /me/community:
+    patch:
+      tags:
+      - Users
+      operationId: changeCommunity
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommunityRequest'
+        description: 请求参数
+      responses:
+        '200':
+          $ref: '#/components/responses/UserResponse'
+  /communities:
+    get:
+      tags:
+      - Users
+      operationId: listCommunities
+      responses:
+        '200':
+          $ref: '#/components/responses/CommunitiesResponse'

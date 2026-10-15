@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: part-service
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://127.0.0.1:5432/part_service_db}
+    username: ${DB_USER:part_service}
+    password: ${DB_PASSWORD:Changeme_123}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+  sql:
+    init:
+      # Schema is managed by scripts/sync_schema.py from the XML definitions.
+      mode: never
+server:
+  port: ${SERVER_PORT:10201}
+  forward-headers-strategy: framework
+logging:
+  file:
+    name: ${LOG_FILE:/var/service/log/part-service/part-service.log}
+  level:
+    root: INFO

@@ -1,0 +1,90 @@
+openapi: 3.0.3
+info:
+  title: Part Service API - Invitations
+  version: 1.0.0
+servers:
+- url: /api/v1
+tags:
+- name: Invitations
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    invitationId:
+      name: invitationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+        description: invitation ID字段
+      description: invitation ID字段
+  responses:
+    InvitationsResponse:
+      description: Paged invitations
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResponseInvitations'
+  schemas:
+    ApiResponseInvitations:
+      allOf:
+      - $ref: ./components.yaml#/components/schemas/ApiResponse
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/PageOfInvitations'
+            description: 业务数据
+      description: ApiResponseInvitations字段
+    PageOfInvitations:
+      allOf:
+      - $ref: ./components.yaml#/components/schemas/Page
+      properties:
+        items:
+          type: array
+          items:
+            $ref: ./components.yaml#/components/schemas/Invitation
+          description: 列表数据
+      description: PageOfInvitations字段
+paths:
+  /invitations:
+    get:
+      tags:
+      - Invitations
+      operationId: listInvitations
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: ./components.yaml#/components/parameters/status
+      - $ref: ./components.yaml#/components/parameters/cursor
+      - $ref: ./components.yaml#/components/parameters/limit
+      responses:
+        '200':
+          $ref: '#/components/responses/InvitationsResponse'
+  /invitations/{invitationId}/accept:
+    post:
+      tags:
+      - Invitations
+      operationId: acceptInvitation
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/invitationId'
+      responses:
+        '200':
+          $ref: ./components.yaml#/components/responses/InvitationResponse
+  /invitations/{invitationId}/reject:
+    post:
+      tags:
+      - Invitations
+      operationId: rejectInvitation
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/invitationId'
+      responses:
+        '200':
+          $ref: ./components.yaml#/components/responses/InvitationResponse

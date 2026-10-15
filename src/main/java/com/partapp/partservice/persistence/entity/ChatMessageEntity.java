@@ -1,0 +1,3 @@
+package com.partapp.partservice.persistence.entity;
+import java.time.Instant; import java.util.UUID; import com.baomidou.mybatisplus.annotation.*;
+@TableName(value="chat_message",autoResultMap=true) public class ChatMessageEntity { @TableId public UUID id; @TableField("room_id") public UUID roomId; @TableField("sender_id") public UUID senderId; @TableField("client_message_id") public String clientMessageId; @TableField("message_type") public String messageType; public String content; @TableField(value="content_meta",typeHandler=com.partapp.partservice.persistence.typehandler.JsonbStringTypeHandler.class) public String contentMeta; @TableField("created_at") public Instant createdAt; @TableField("recalled_at") public Instant recalledAt; }

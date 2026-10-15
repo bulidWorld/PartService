@@ -1,0 +1,3 @@
+package com.partapp.partservice.persistence.entity;
+import java.time.Instant; import java.util.UUID; import com.baomidou.mybatisplus.annotation.*;
+@TableName("topic") public class TopicEntity { @TableId public UUID id; @TableField("publisher_id") public UUID publisherId; @TableField("community_id") public UUID communityId; public String title; public String detail; @TableField(value="constraint_json",typeHandler=com.partapp.partservice.persistence.typehandler.JsonbStringTypeHandler.class) public String constraintJson; public String status; @TableField("expires_at") public Instant expiresAt; @TableField("created_at") public Instant createdAt; }

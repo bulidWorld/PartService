@@ -1,0 +1,249 @@
+openapi: 3.0.3
+info:
+  title: Part Service API - Auth
+  version: 1.0.0
+servers:
+- url: /api/v1
+tags:
+- name: Auth
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters: {}
+  responses:
+    EmptyResponse:
+      description: Successful operation with an empty object
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResponseEmpty'
+    SendCodeResponse:
+      description: Verification code delivery limits
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResponseSendCode'
+    TokenPairResponse:
+      description: Authentication tokens and user profile
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResponseTokenPair'
+  schemas:
+    ApiResponseEmpty:
+      allOf:
+      - $ref: ./components.yaml#/components/schemas/ApiResponse
+      - type: object
+        properties:
+          data:
+            type: object
+            additionalProperties: false
+            description: 业务数据
+      description: ApiResponseEmpty字段
+    ApiResponseSendCode:
+      allOf:
+      - $ref: ./components.yaml#/components/schemas/ApiResponse
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/SendCodeResult'
+            description: 业务数据
+      description: ApiResponseSendCode字段
+    ApiResponseTokenPair:
+      allOf:
+      - $ref: ./components.yaml#/components/schemas/ApiResponse
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/TokenPair'
+            description: 业务数据
+      description: ApiResponseTokenPair字段
+    LoginRequest:
+      type: object
+      required:
+      - identityType
+      - identityValue
+      - code
+      properties:
+        identityType:
+          type: string
+          description: 身份类型（email 或 phone）
+        identityValue:
+          type: string
+          description: 身份值
+        code:
+          type: string
+          description: 业务状态码
+        deviceId:
+          type: string
+          description: 设备标识
+      description: LoginRequest字段
+    RefreshRequest:
+      type: object
+      required:
+      - refreshToken
+      properties:
+        refreshToken:
+          type: string
+          description: 刷新令牌
+      description: RefreshRequest字段
+    RegisterRequest:
+      type: object
+      required:
+      - identityType
+      - identityValue
+      - code
+      - nickname
+      - communityId
+      properties:
+        identityType:
+          type: string
+          description: 身份类型（email 或 phone）
+        identityValue:
+          type: string
+          description: 身份值
+        code:
+          type: string
+          description: 业务状态码
+        nickname:
+          type: string
+          maxLength: 32
+          description: 用户昵称
+        communityId:
+          type: string
+          format: uuid
+          description: 社区 ID
+      description: RegisterRequest字段
+    SendCodeRequest:
+      type: object
+      required:
+      - identityType
+      - identityValue
+      - purpose
+      properties:
+        identityType:
+          type: string
+          description: 身份类型（email 或 phone）
+        identityValue:
+          type: string
+          description: 身份值
+        purpose:
+          type: string
+          description: 验证码用途
+      description: SendCodeRequest字段
+    SendCodeResult:
+      type: object
+      required:
+      - expires_in
+      - next_send_after
+      properties:
+        expires_in:
+          type: integer
+          description: Verification code lifetime in seconds
+        next_send_after:
+          type: integer
+          description: Minimum seconds before another code can be requested
+      description: SendCodeResult字段
+    TokenPair:
+      type: object
+      required:
+      - accessToken
+      - expiresIn
+      - refreshToken
+      - user
+      properties:
+        accessToken:
+          type: string
+          description: 访问令牌
+        expiresIn:
+          type: integer
+          format: int64
+          description: 访问令牌有效期（秒）
+        refreshToken:
+          type: string
+          description: 刷新令牌
+        user:
+          $ref: ./components.yaml#/components/schemas/User
+          description: user字段
+      description: TokenPair字段
+paths:
+  /auth/send-code:
+    post:
+      tags:
+      - Auth
+      operationId: sendCode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendCodeRequest'
+        description: 请求参数
+      responses:
+        '200':
+          $ref: '#/components/responses/SendCodeResponse'
+  /auth/register:
+    post:
+      tags:
+      - Auth
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+        description: 请求参数
+      responses:
+        '200':
+          $ref: '#/components/responses/TokenPairResponse'
+  /auth/login:
+    post:
+      tags:
+      - Auth
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+        description: 请求参数
+      responses:
+        '200':
+          $ref: '#/components/responses/TokenPairResponse'
+  /auth/refresh:
+    post:
+      tags:
+      - Auth
+      operationId: refresh
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+        description: 请求参数
+      responses:
+        '200':
+          $ref: '#/components/responses/TokenPairResponse'
+  /auth/logout:
+    post:
+      tags:
+      - Auth
+      operationId: logout
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+        description: 请求参数
+      responses:
+        '200':
+          $ref: '#/components/responses/EmptyResponse'

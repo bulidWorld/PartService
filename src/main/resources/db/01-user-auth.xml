@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<database name="part-service" source="01-user-auth.xml" dialect="postgresql">
+  <tables>
+    <table name="community" if-not-exists="true" comment="社区">
+      <columns>
+        <column name="id" type="uuid" nullable="true" default="gen_random_uuid()" comment="主键 ID" />
+        <column name="name" type="varchar(64)" nullable="false" comment="名称" />
+        <column name="status" type="varchar(16)" nullable="false" default="'active'" comment="状态" />
+        <column name="created_at" type="timestamptz" nullable="false" default="now()" comment="创建时间" />
+        <column name="updated_at" type="timestamptz" nullable="false" default="now()"
+          comment="最后更新时间" />
+      </columns>
+      <constraints>
+        <primary-key name="pk_community_id" columns="id" />
+        <unique name="uq_community_name" columns="name" />
+        <check name="ck_community_status" expression="status IN ('active', 'inactive')" />
+      </constraints>
+    </table>
+    <table name="user" if-not-exists="true" comment="用户">
+      <columns>
+        <column name="id" type="uuid" nullable="true" default="gen_random_uuid()" comment="主键 ID" />
+        <column name="nickname" type="varchar(32)" nullable="false" comment="用户昵称" />
+        <column name="community_id" type="uuid" nullable="false" comment="所属社区 ID" />
+        <column name="gender" type="varchar(16)" nullable="true" comment="性别" />
+        <column name="birth_date" type="date" nullable="true" comment="出生日期" />
+        <column name="avatar_url" type="text" nullable="true" comment="头像地址" />
+        <column name="status" type="varchar(16)" nullable="false" default="'active'" comment="状态" />
+        <column name="community_changed_at" type="timestamptz" nullable="false" default="now()"
+          comment="最近切换社区时间" />
+        <column name="last_login_at" type="timestamptz" nullable="true" comment="最近登录时间" />
+        <column name="created_at" type="timestamptz" nullable="false" default="now()" comment="创建时间" />
+        <column name="updated_at" type="timestamptz" nullable="false" default="now()"
+          comment="最后更新时间" />
+      </columns>
+      <constraints>
+        <primary-key name="pk_user_id" columns="id" />
+        <foreign-key name="fk_user_community_id" columns="community_id" references-table="community"
+          references-columns="id" />
+        <check name="ck_user_gender"
+          expression="gender IS NULL OR gender IN ('male', 'female', 'other')" />
+        <check name="ck_user_status" expression="status IN ('active', 'blocked', 'deleted')" />
+        <check name="ck_user_birth_date"
+          expression="birth_date IS NULL OR birth_date &lt;= CURRENT_DATE" />
+      </constraints>
+      <indexes>
+        <index name="idx_user_community_status_created" unique="false" method="btree"
+          if-not-exists="true">
+          <column name="community_id" order="ASC" />
+          <column name="status" order="ASC" />
+          <column name="created_at" order="DESC" />
+          <column name="id" order="DESC" />
+        </index>
+      </indexes>
+    </table>
+    <table name="user_identity" if-not-exists="true" comment="用户身份">
+      <columns>
+        <column name="id" type="uuid" nullable="true" default="gen_random_uuid()" comment="主键 ID" />
+        <column name="user_id" type="uuid" nullable="false" comment="用户 ID" />
+        <column name="identity_type" type="varchar(16)" nullable="false" comment="身份类型" />
+        <column name="identity_value" type="varchar(254)" nullable="false" comment="身份值" />
+        <column name="verified_at" type="timestamptz" nullable="true" comment="验证时间" />
+        <column name="is_primary" type="boolean" nullable="false" default="false" comment="是否主身份" />
+        <column name="created_at" type="timestamptz" nullable="false" default="now()" comment="创建时间" />
+      </columns>
+      <constraints>
+        <primary-key name="pk_user_identity_id" columns="id" />
+        <foreign-key name="fk_user_identity_user_id" columns="user_id" references-table="user"
+          references-columns="id" />
+        <check name="ck_user_identity_type" expression="identity_type IN ('email', 'phone')" />
+      </constraints>
+      <indexes>
+        <index name="uq_user_identity_type_value" unique="true" method="btree" if-not-exists="true">
+          <column name="identity_type" order="ASC" />
+          <column name="identity_value" order="ASC" />
+        </index>
+        <index name="uq_user_identity_primary" unique="true" method="btree" if-not-exists="true"
+          where="is_primary">
+          <column name="user_id" order="ASC" />
+        </index>
+        <index name="idx_user_identity_user" unique="false" method="btree" if-not-exists="true">
+          <column name="user_id" order="ASC" />
+        </index>
+      </indexes>
+    </table>
+    <table name="verification_code" if-not-exists="true" comment="验证码">
+      <columns>
+        <column name="id" type="uuid" nullable="true" default="gen_random_uuid()" comment="主键 ID" />
+        <column name="identity_type" type="varchar(16)" nullable="false" comment="身份类型" />
+        <column name="identity_value" type="varchar(254)" nullable="false" comment="身份值" />
+        <column name="purpose" type="varchar(16)" nullable="false" comment="验证码用途" />
+        <column name="code_hash" type="varchar(128)" nullable="false" comment="验证码哈希" />
+        <column name="expires_at" type="timestamptz" nullable="false" comment="过期时间" />
+        <column name="consumed_at" type="timestamptz" nullable="true" comment="消费时间" />
+        <column name="attempt_count" type="integer" nullable="false" default="0" comment="校验尝试次数" />
+        <column name="created_at" type="timestamptz" nullable="false" default="now()" comment="创建时间" />
+      </columns>
+      <constraints>
+        <primary-key name="pk_verification_code_id" columns="id" />
+        <check name="ck_verification_identity_type" expression="identity_type IN ('email', 'phone')" />
+        <check name="ck_verification_purpose" expression="purpose IN ('register', 'login', 'reset')" />
+        <check name="ck_verification_attempt_count" expression="attempt_count &gt;= 0" />
+      </constraints>
+      <indexes>
+        <index name="idx_verification_code_lookup" unique="false" method="btree"
+          if-not-exists="true">
+          <column name="identity_type" order="ASC" />
+          <column name="identity_value" order="ASC" />
+          <column name="purpose" order="ASC" />
+          <column name="created_at" order="DESC" />
+        </index>
+      </indexes>
+    </table>
+    <table name="refresh_token" if-not-exists="true" comment="刷新令牌">
+      <columns>
+        <column name="id" type="uuid" nullable="true" default="gen_random_uuid()" comment="主键 ID" />
+        <column name="user_id" type="uuid" nullable="false" comment="用户 ID" />
+        <column name="token_hash" type="varchar(128)" nullable="false" comment="令牌哈希" />
+        <column name="device_id" type="varchar(128)" nullable="true" comment="设备 ID" />
+        <column name="expires_at" type="timestamptz" nullable="false" comment="过期时间" />
+        <column name="revoked_at" type="timestamptz" nullable="true" comment="撤销时间" />
+        <column name="created_at" type="timestamptz" nullable="false" default="now()" comment="创建时间" />
+      </columns>
+      <constraints>
+        <primary-key name="pk_refresh_token_id" columns="id" />
+        <foreign-key name="fk_refresh_token_user_id" columns="user_id" references-table="user"
+          references-columns="id" />
+        <unique name="uq_refresh_token_token_hash" columns="token_hash" />
+      </constraints>
+      <indexes>
+        <index name="idx_refresh_token_user_device" unique="false" method="btree"
+          if-not-exists="true">
+          <column name="user_id" order="ASC" />
+          <column name="device_id" order="ASC" />
+        </index>
+        <index name="idx_refresh_token_active" unique="false" method="btree" if-not-exists="true"
+          where="revoked_at IS NULL">
+          <column name="user_id" order="ASC" />
+          <column name="expires_at" order="ASC" />
+        </index>
+      </indexes>
+    </table>
+  </tables>
+</database>

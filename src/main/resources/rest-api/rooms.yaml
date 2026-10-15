@@ -1,0 +1,350 @@
+openapi: 3.0.3
+info:
+  title: Part Service API - Rooms
+  version: 1.0.0
+servers:
+- url: /api/v1
+tags:
+- name: Rooms
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    before:
+      name: before
+      in: query
+      required: false
+      schema:
+        type: string
+        format: uuid
+        description: before字段
+      description: before字段
+    messageId:
+      name: messageId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+        description: message ID字段
+      description: message ID字段
+    roomId:
+      name: roomId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+        description: 聊天室 ID
+      description: 聊天室 ID
+  responses:
+    MessageResponse:
+      description: Chat message
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResponseMessage'
+    MessagesResponse:
+      description: Paged chat messages
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResponseMessages'
+    ReadResponse:
+      description: Updated read position
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResponseRead'
+    RoomResponse:
+      description: Chat room
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResponseRoom'
+    RoomsResponse:
+      description: Paged chat rooms
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResponseRooms'
+  schemas:
+    ApiResponseMessage:
+      allOf:
+      - $ref: ./components.yaml#/components/schemas/ApiResponse
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/Message'
+            description: 业务数据
+      description: ApiResponseMessage字段
+    ApiResponseMessages:
+      allOf:
+      - $ref: ./components.yaml#/components/schemas/ApiResponse
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/PageOfMessages'
+            description: 业务数据
+      description: ApiResponseMessages字段
+    ApiResponseRead:
+      allOf:
+      - $ref: ./components.yaml#/components/schemas/ApiResponse
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/ReadPosition'
+            description: 业务数据
+      description: ApiResponseRead字段
+    ApiResponseRoom:
+      allOf:
+      - $ref: ./components.yaml#/components/schemas/ApiResponse
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/Room'
+            description: 业务数据
+      description: ApiResponseRoom字段
+    ApiResponseRooms:
+      allOf:
+      - $ref: ./components.yaml#/components/schemas/ApiResponse
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/PageOfRooms'
+            description: 业务数据
+      description: ApiResponseRooms字段
+    Message:
+      type: object
+      required:
+      - id
+      - roomId
+      - senderId
+      - clientMessageId
+      - messageType
+      - contentMeta
+      - createdAt
+      - recalled
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 唯一标识
+        roomId:
+          type: string
+          format: uuid
+          description: 聊天室 ID
+        senderId:
+          type: string
+          format: uuid
+          description: 消息发送者 ID
+        clientMessageId:
+          type: string
+          description: 客户端消息幂等 ID
+        messageType:
+          type: string
+          description: 消息类型
+        content:
+          type: string
+          nullable: true
+          description: 消息正文
+        contentMeta:
+          type: object
+          additionalProperties: true
+          description: 消息附加元数据
+        createdAt:
+          type: string
+          format: date-time
+          description: 创建时间
+        recalled:
+          type: boolean
+          description: 是否已撤回
+      description: Message字段
+    MessageRequest:
+      type: object
+      required:
+      - clientMessageId
+      - messageType
+      properties:
+        clientMessageId:
+          type: string
+          maxLength: 64
+          description: 客户端消息幂等 ID
+        messageType:
+          type: string
+          description: 消息类型
+        content:
+          type: string
+          description: 消息正文
+        contentMeta:
+          type: object
+          additionalProperties: true
+          description: 消息附加元数据
+      description: MessageRequest字段
+    PageOfMessages:
+      allOf:
+      - $ref: ./components.yaml#/components/schemas/Page
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+          description: 列表数据
+      description: PageOfMessages字段
+    PageOfRooms:
+      allOf:
+      - $ref: ./components.yaml#/components/schemas/Page
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Room'
+          description: 列表数据
+      description: PageOfRooms字段
+    ReadPosition:
+      type: object
+      required:
+      - roomId
+      - lastReadMessageId
+      properties:
+        roomId:
+          type: string
+          format: uuid
+          description: 聊天室 ID
+        lastReadMessageId:
+          type: string
+          format: uuid
+          description: 最后已读消息 ID
+      description: ReadPosition字段
+    ReadRequest:
+      type: object
+      required:
+      - lastReadMessageId
+      properties:
+        lastReadMessageId:
+          type: string
+          format: uuid
+          description: 最后已读消息 ID
+      description: ReadRequest字段
+    Room:
+      type: object
+      required:
+      - id
+      - topicId
+      - members
+      - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 唯一标识
+        topicId:
+          type: string
+          format: uuid
+          description: 主题 ID
+        ownerId:
+          type: string
+          format: uuid
+          nullable: true
+          description: 聊天室所有者 ID
+        members:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: 聊天室成员 ID 列表
+        createdAt:
+          type: string
+          format: date-time
+          description: 创建时间
+      description: Room字段
+paths:
+  /rooms:
+    get:
+      tags:
+      - Rooms
+      operationId: listRooms
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          $ref: '#/components/responses/RoomsResponse'
+  /rooms/{roomId}:
+    get:
+      tags:
+      - Rooms
+      operationId: getRoom
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/roomId'
+      responses:
+        '200':
+          $ref: '#/components/responses/RoomResponse'
+  /rooms/{roomId}/messages:
+    get:
+      tags:
+      - Rooms
+      operationId: listMessages
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/roomId'
+      - $ref: '#/components/parameters/before'
+      - $ref: ./components.yaml#/components/parameters/limit
+      responses:
+        '200':
+          $ref: '#/components/responses/MessagesResponse'
+    post:
+      tags:
+      - Rooms
+      operationId: sendMessage
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/roomId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageRequest'
+        description: 请求参数
+      responses:
+        '200':
+          $ref: '#/components/responses/MessageResponse'
+  /rooms/{roomId}/read:
+    post:
+      tags:
+      - Rooms
+      operationId: markRoomRead
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/roomId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReadRequest'
+        description: 请求参数
+      responses:
+        '200':
+          $ref: '#/components/responses/ReadResponse'
+  /rooms/{roomId}/messages/{messageId}/recall:
+    post:
+      tags:
+      - Rooms
+      operationId: recallMessage
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/roomId'
+      - $ref: '#/components/parameters/messageId'
+      responses:
+        '200':
+          $ref: '#/components/responses/MessageResponse'

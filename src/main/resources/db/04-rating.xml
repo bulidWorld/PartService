@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<database name="part-service" source="04-rating.xml" dialect="postgresql">
+  <tables>
+    <table name="rating_category" if-not-exists="true" comment="评价分类">
+      <columns>
+        <column name="id" type="uuid" nullable="true" default="gen_random_uuid()" comment="主键 ID" />
+        <column name="code" type="varchar(32)" nullable="false" comment="Code" />
+        <column name="name" type="varchar(32)" nullable="false" comment="名称" />
+        <column name="polarity" type="varchar(16)" nullable="false" comment="评价倾向" />
+        <column name="is_active" type="boolean" nullable="false" default="true" comment="Is active" />
+        <column name="sort_order" type="integer" nullable="false" default="0" comment="排序值" />
+        <column name="created_at" type="timestamptz" nullable="false" default="now()" comment="创建时间" />
+      </columns>
+      <constraints>
+        <primary-key name="pk_rating_category_id" columns="id" />
+        <unique name="uq_rating_category_code" columns="code" />
+        <check name="ck_rating_category_polarity"
+          expression="polarity IN ('positive', 'neutral', 'negative')" />
+      </constraints>
+      <indexes>
+        <index name="idx_rating_category_active_order" unique="false" method="btree"
+          if-not-exists="true">
+          <column name="is_active" order="ASC" />
+          <column name="sort_order" order="ASC" />
+          <column name="id" order="ASC" />
+        </index>
+      </indexes>
+    </table>
+    <table name="rating" if-not-exists="true" comment="评价记录">
+      <columns>
+        <column name="id" type="uuid" nullable="true" default="gen_random_uuid()" comment="主键 ID" />
+        <column name="topic_id" type="uuid" nullable="false" comment="主题 ID" />
+        <column name="from_user_id" type="uuid" nullable="false" comment="评价者 ID" />
+        <column name="to_user_id" type="uuid" nullable="false" comment="被评价者 ID" />
+        <column name="score" type="varchar(8)" nullable="false" comment="评分" />
+        <column name="comment" type="varchar(500)" nullable="true" comment="评价内容" />
+        <column name="created_at" type="timestamptz" nullable="false" default="now()" comment="创建时间" />
+        <column name="updated_at" type="timestamptz" nullable="false" default="now()"
+          comment="最后更新时间" />
+        <column name="deleted_at" type="timestamptz" nullable="true" comment="删除时间" />
+      </columns>
+      <constraints>
+        <primary-key name="pk_rating_id" columns="id" />
+        <foreign-key name="fk_rating_topic_id" columns="topic_id" references-table="topic"
+          references-columns="id" />
+        <foreign-key name="fk_rating_from_user_id" columns="from_user_id" references-table="user"
+          references-columns="id" />
+        <foreign-key name="fk_rating_to_user_id" columns="to_user_id" references-table="user"
+          references-columns="id" />
+        <check name="ck_rating_score" expression="score IN ('good', 'neutral', 'bad')" />
+        <check name="ck_rating_distinct_users" expression="from_user_id &lt;&gt; to_user_id" />
+        <unique name="uq_rating_topic_from_to" columns="topic_id, from_user_id, to_user_id" />
+      </constraints>
+      <indexes>
+        <index name="idx_rating_to_user_created" unique="false" method="btree" if-not-exists="true">
+          <column name="to_user_id" order="ASC" />
+          <column name="created_at" order="DESC" />
+          <column name="id" order="DESC" />
+        </index>
+        <index name="idx_rating_topic_created" unique="false" method="btree" if-not-exists="true">
+          <column name="topic_id" order="ASC" />
+          <column name="created_at" order="DESC" />
+          <column name="id" order="DESC" />
+        </index>
+      </indexes>
+    </table>
+    <table name="rating_category_item" if-not-exists="true" comment="评价与分类关联">
+      <columns>
+        <column name="rating_id" type="uuid" nullable="false" comment="评价 ID" />
+        <column name="category_id" type="uuid" nullable="false" comment="评价分类 ID" />
+      </columns>
+      <constraints>
+        <foreign-key name="fk_rating_category_item_rating_id" columns="rating_id"
+          references-table="rating" references-columns="id" on-delete="CASCADE" />
+        <foreign-key name="fk_rating_category_item_category_id" columns="category_id"
+          references-table="rating_category" references-columns="id" />
+        <primary-key name="pk_rating_category_item" columns="rating_id,category_id" />
+      </constraints>
+    </table>
+    <table name="user_rating_stat" if-not-exists="true" comment="用户评价统计">
+      <columns>
+        <column name="user_id" type="uuid" nullable="true" comment="用户 ID" />
+        <column name="good_count" type="integer" nullable="false" default="0" comment="好评数量" />
+        <column name="neutral_count" type="integer" nullable="false" default="0" comment="中评数量" />
+        <column name="bad_count" type="integer" nullable="false" default="0" comment="差评数量" />
+        <column name="total_count" type="integer" nullable="false" default="0" comment="评价总数" />
+        <column name="good_rate" type="numeric(5,4)" nullable="false" default="0" comment="好评率" />
+        <column name="bad_rate" type="numeric(5,4)" nullable="false" default="0" comment="差评率" />
+        <column name="calculated_at" type="timestamptz" nullable="false" default="now()"
+          comment="统计计算时间" />
+        <column name="algorithm_version" type="varchar(32)" nullable="false" comment="算法版本" />
+      </columns>
+      <constraints>
+        <primary-key name="pk_user_rating_stat_user_id" columns="user_id" />
+        <foreign-key name="fk_user_rating_stat_user_id" columns="user_id" references-table="user"
+          references-columns="id" on-delete="CASCADE" />
+        <check name="ck_user_rating_stat_counts"
+          expression="good_count &gt;= 0 AND neutral_count &gt;= 0 AND bad_count &gt;= 0 AND total_count &gt;= 0" />
+        <check name="ck_user_rating_stat_rates"
+          expression="good_rate &gt;= 0 AND good_rate &lt;= 1 AND bad_rate &gt;= 0 AND bad_rate &lt;= 1" />
+      </constraints>
+    </table>
+    <table name="user_risk_tag" if-not-exists="true" comment="用户风险标签">
+      <columns>
+        <column name="id" type="uuid" nullable="true" default="gen_random_uuid()" comment="主键 ID" />
+        <column name="user_id" type="uuid" nullable="false" comment="用户 ID" />
+        <column name="tag_code" type="varchar(32)" nullable="false" comment="风险标签编码" />
+        <column name="source" type="varchar(16)" nullable="false" comment="来源" />
+        <column name="confidence" type="numeric(5,4)" nullable="true" comment="置信度" />
+        <column name="evidence" type="jsonb" nullable="false" default="'{}'::jsonb" comment="证据详情" />
+        <column name="status" type="varchar(16)" nullable="false" default="'active'" comment="状态" />
+        <column name="created_at" type="timestamptz" nullable="false" default="now()" comment="创建时间" />
+        <column name="removed_at" type="timestamptz" nullable="true" comment="Removed at" />
+      </columns>
+      <constraints>
+        <primary-key name="pk_user_risk_tag_id" columns="id" />
+        <foreign-key name="fk_user_risk_tag_user_id" columns="user_id" references-table="user"
+          references-columns="id" on-delete="CASCADE" />
+        <check name="ck_user_risk_tag_source" expression="source IN ('system', 'manual')" />
+        <check name="ck_user_risk_tag_status" expression="status IN ('active', 'removed')" />
+        <check name="ck_user_risk_tag_confidence"
+          expression="confidence IS NULL OR (confidence &gt;= 0 AND confidence &lt;= 1)" />
+        <check name="ck_user_risk_tag_evidence_object"
+          expression="jsonb_typeof(evidence) = 'object'" />
+      </constraints>
+      <indexes>
+        <index name="idx_user_risk_tag_user_status_created" unique="false" method="btree"
+          if-not-exists="true">
+          <column name="user_id" order="ASC" />
+          <column name="status" order="ASC" />
+          <column name="created_at" order="DESC" />
+          <column name="id" order="DESC" />
+        </index>
+      </indexes>
+    </table>
+  </tables>
+  <statements>
+    <statement id="04-rating-010">
+      <sql>INSERT INTO rating_category (code, name, polarity, sort_order)
+        VALUES
+        ('reliable', '守信', 'positive', 10),
+        ('punctual', '准时', 'positive', 20),
+        ('communicative', '沟通顺畅', 'positive', 30),
+        ('friendly', '友善', 'positive', 40),
+        ('helpful', '有帮助', 'positive', 50),
+        ('average', '一般', 'neutral', 60),
+        ('flat_communication', '沟通平淡', 'neutral', 70),
+        ('no_show', '失约', 'negative', 80),
+        ('late', '迟到', 'negative', 90),
+        ('harassment', '恶意骚扰', 'negative', 100),
+        ('verbal_attack', '言语攻击', 'negative', 110),
+        ('misinformation', '发布不实信息', 'negative', 120)
+        ON CONFLICT (code) DO NOTHING</sql>
+    </statement>
+  </statements>
+</database>
