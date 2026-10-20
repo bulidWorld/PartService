@@ -3,12 +3,16 @@ package com.partapp.partservice.persistence;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.UUID;
+import java.util.Map;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import com.partapp.partservice.persistence.mapper.ChatMessageMapper;
+import com.partapp.partservice.persistence.mapper.GlobalDictionaryMapper;
+import com.partapp.partservice.persistence.entity.GlobalDictionaryEntity;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.partapp.partservice.persistence.typehandler.UuidTypeHandler;
 import com.partapp.partservice.persistence.typehandler.JsonbStringTypeHandler;
 
@@ -16,6 +20,19 @@ import com.partapp.partservice.persistence.typehandler.JsonbStringTypeHandler;
 class PersistenceConfigurationTest {
   @Autowired
   SqlSessionFactory sessions;
+
+  @Test
+  void dictionaryQueryQuotesKeyValueAndDescColumns() {
+    var configuration = sessions.getConfiguration();
+    assertTrue(configuration.hasMapper(GlobalDictionaryMapper.class));
+    var query = new QueryWrapper<GlobalDictionaryEntity>().eq("\"key\"", "register_verify_code");
+    var statement = configuration.getMappedStatement(GlobalDictionaryMapper.class.getName() + ".selectList");
+    String sql = statement.getBoundSql(Map.of("ew", query)).getSql().replaceAll("\\s+", " ");
+    assertTrue(sql.contains("\"key\""));
+    assertTrue(sql.contains("\"value\""));
+    assertTrue(sql.contains("\"desc\""));
+    assertTrue(sql.contains("WHERE (\"key\" = ?)"), sql);
+  }
 
   @Test
   void contextInitializesMappersWithUuidAndExplicitJsonbHandlers() {

@@ -27,9 +27,73 @@ components:
           schema:
             $ref: '#/components/schemas/ApiResponseUser'
   schemas:
+    ApiResponse:
+      type: object
+      required:
+      - code
+      - message
+      - data
+      - requestId
+      properties:
+        code:
+          type: integer
+          format: int32
+          description: 业务状态码
+        message:
+          type: string
+          description: 响应消息
+        data:
+          nullable: true
+          description: Response payload; use the operation-specific response schema
+        requestId:
+          type: string
+          description: 请求链路 ID
+      description: ApiResponse字段
+    User:
+      type: object
+      required:
+      - id
+      - nickname
+      - communityId
+      - status
+      - communityChangedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 唯一标识
+        nickname:
+          type: string
+          description: 用户昵称
+        communityId:
+          type: string
+          format: uuid
+          description: 社区 ID
+        gender:
+          type: string
+          nullable: true
+          description: 性别
+        birthDate:
+          type: string
+          format: date
+          nullable: true
+          description: 出生日期
+        avatarUrl:
+          type: string
+          nullable: true
+          description: 头像地址
+        status:
+          type: string
+          description: 当前状态
+        communityChangedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: communityChangedAt字段
+      description: User字段
     ApiResponseCommunities:
       allOf:
-      - $ref: ./components.yaml#/components/schemas/ApiResponse
+      - $ref: '#/components/schemas/ApiResponse'
       - type: object
         properties:
           data:
@@ -40,11 +104,11 @@ components:
       description: ApiResponseCommunities字段
     ApiResponseUser:
       allOf:
-      - $ref: ./components.yaml#/components/schemas/ApiResponse
+      - $ref: '#/components/schemas/ApiResponse'
       - type: object
         properties:
           data:
-            $ref: ./components.yaml#/components/schemas/User
+            $ref: '#/components/schemas/User'
             description: 业务数据
       description: ApiResponseUser字段
     CommunityRequest:

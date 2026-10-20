@@ -15,7 +15,7 @@ public final class Requests {
   public record SendCode(@NotBlank String identityType, @NotBlank String identityValue, @NotBlank String purpose) {
   }
 
-  public record Register(@NotBlank String identityType, @NotBlank String identityValue, @NotBlank String code,
+  public record Register(@NotBlank String identityType, @NotBlank String identityValue, String code,
       @NotBlank @Size(max = 32) String nickname, @NotNull UUID communityId) {
   }
 

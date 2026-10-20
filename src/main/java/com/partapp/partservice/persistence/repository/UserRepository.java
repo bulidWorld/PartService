@@ -65,6 +65,8 @@ public class UserRepository {
   }
 
   public void verifyCode(String type, String value, String code, String purpose) {
+    if (code == null || code.isBlank())
+      throw ApiException.bad("验证码错误或已过期");
     String key = identityKey(type, value) + ":" + purpose;
     if (!Objects.equals(getCode(key), code))
       throw ApiException.bad("验证码错误或已过期");

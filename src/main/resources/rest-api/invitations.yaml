@@ -13,6 +13,33 @@ components:
       scheme: bearer
       bearerFormat: JWT
   parameters:
+    status:
+      name: status
+      in: query
+      required: false
+      schema:
+        type: string
+        description: 当前状态
+      description: 当前状态
+    cursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+        description: cursor字段
+      description: cursor字段
+    limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+        description: limit字段
+      description: limit字段
     invitationId:
       name: invitationId
       in: path
@@ -23,6 +50,12 @@ components:
         description: invitation ID字段
       description: invitation ID字段
   responses:
+    InvitationResponse:
+      description: Invitation
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResponseInvitation'
     InvitationsResponse:
       description: Paged invitations
       content:
@@ -30,9 +63,93 @@ components:
           schema:
             $ref: '#/components/schemas/ApiResponseInvitations'
   schemas:
+    ApiResponse:
+      type: object
+      required:
+      - code
+      - message
+      - data
+      - requestId
+      properties:
+        code:
+          type: integer
+          format: int32
+          description: 业务状态码
+        message:
+          type: string
+          description: 响应消息
+        data:
+          nullable: true
+          description: Response payload; use the operation-specific response schema
+        requestId:
+          type: string
+          description: 请求链路 ID
+      description: ApiResponse字段
+    Page:
+      type: object
+      required:
+      - items
+      - nextCursor
+      - hasMore
+      properties:
+        items:
+          type: array
+          items: {}
+          description: 列表数据
+        nextCursor:
+          type: string
+          nullable: true
+          description: 下一页游标
+        hasMore:
+          type: boolean
+          description: 是否还有更多数据
+      description: Page字段
+    Invitation:
+      type: object
+      required:
+      - id
+      - topicId
+      - inviteeId
+      - inviterId
+      - status
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 唯一标识
+        topicId:
+          type: string
+          format: uuid
+          description: 主题 ID
+        inviteeId:
+          type: string
+          format: uuid
+          description: 受邀用户 ID
+        inviterId:
+          type: string
+          format: uuid
+          description: 邀请人 ID
+        status:
+          type: string
+          description: 当前状态
+        roomId:
+          type: string
+          format: uuid
+          nullable: true
+          description: 聊天室 ID
+      description: Invitation字段
+    ApiResponseInvitation:
+      allOf:
+      - $ref: '#/components/schemas/ApiResponse'
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/Invitation'
+            description: 业务数据
+      description: ApiResponseInvitation字段
     ApiResponseInvitations:
       allOf:
-      - $ref: ./components.yaml#/components/schemas/ApiResponse
+      - $ref: '#/components/schemas/ApiResponse'
       - type: object
         properties:
           data:
@@ -41,12 +158,12 @@ components:
       description: ApiResponseInvitations字段
     PageOfInvitations:
       allOf:
-      - $ref: ./components.yaml#/components/schemas/Page
+      - $ref: '#/components/schemas/Page'
       properties:
         items:
           type: array
           items:
-            $ref: ./components.yaml#/components/schemas/Invitation
+            $ref: '#/components/schemas/Invitation'
           description: 列表数据
       description: PageOfInvitations字段
 paths:
@@ -58,9 +175,9 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - $ref: ./components.yaml#/components/parameters/status
-      - $ref: ./components.yaml#/components/parameters/cursor
-      - $ref: ./components.yaml#/components/parameters/limit
+      - $ref: '#/components/parameters/status'
+      - $ref: '#/components/parameters/cursor'
+      - $ref: '#/components/parameters/limit'
       responses:
         '200':
           $ref: '#/components/responses/InvitationsResponse'
@@ -75,7 +192,7 @@ paths:
       - $ref: '#/components/parameters/invitationId'
       responses:
         '200':
-          $ref: ./components.yaml#/components/responses/InvitationResponse
+          $ref: '#/components/responses/InvitationResponse'
   /invitations/{invitationId}/reject:
     post:
       tags:
@@ -87,4 +204,4 @@ paths:
       - $ref: '#/components/parameters/invitationId'
       responses:
         '200':
-          $ref: ./components.yaml#/components/responses/InvitationResponse
+          $ref: '#/components/responses/InvitationResponse'

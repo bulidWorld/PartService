@@ -33,9 +33,73 @@ components:
           schema:
             $ref: '#/components/schemas/ApiResponseTokenPair'
   schemas:
+    ApiResponse:
+      type: object
+      required:
+      - code
+      - message
+      - data
+      - requestId
+      properties:
+        code:
+          type: integer
+          format: int32
+          description: 业务状态码
+        message:
+          type: string
+          description: 响应消息
+        data:
+          nullable: true
+          description: Response payload; use the operation-specific response schema
+        requestId:
+          type: string
+          description: 请求链路 ID
+      description: ApiResponse字段
+    User:
+      type: object
+      required:
+      - id
+      - nickname
+      - communityId
+      - status
+      - communityChangedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 唯一标识
+        nickname:
+          type: string
+          description: 用户昵称
+        communityId:
+          type: string
+          format: uuid
+          description: 社区 ID
+        gender:
+          type: string
+          nullable: true
+          description: 性别
+        birthDate:
+          type: string
+          format: date
+          nullable: true
+          description: 出生日期
+        avatarUrl:
+          type: string
+          nullable: true
+          description: 头像地址
+        status:
+          type: string
+          description: 当前状态
+        communityChangedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: communityChangedAt字段
+      description: User字段
     ApiResponseEmpty:
       allOf:
-      - $ref: ./components.yaml#/components/schemas/ApiResponse
+      - $ref: '#/components/schemas/ApiResponse'
       - type: object
         properties:
           data:
@@ -45,7 +109,7 @@ components:
       description: ApiResponseEmpty字段
     ApiResponseSendCode:
       allOf:
-      - $ref: ./components.yaml#/components/schemas/ApiResponse
+      - $ref: '#/components/schemas/ApiResponse'
       - type: object
         properties:
           data:
@@ -54,7 +118,7 @@ components:
       description: ApiResponseSendCode字段
     ApiResponseTokenPair:
       allOf:
-      - $ref: ./components.yaml#/components/schemas/ApiResponse
+      - $ref: '#/components/schemas/ApiResponse'
       - type: object
         properties:
           data:
@@ -95,7 +159,6 @@ components:
       required:
       - identityType
       - identityValue
-      - code
       - nickname
       - communityId
       properties:
@@ -107,7 +170,7 @@ components:
           description: 身份值
         code:
           type: string
-          description: 业务状态码
+          description: 注册验证码；全局配置 register_verify_code 为 true 时必填，为 false 时可省略
         nickname:
           type: string
           maxLength: 32
@@ -166,7 +229,7 @@ components:
           type: string
           description: 刷新令牌
         user:
-          $ref: ./components.yaml#/components/schemas/User
+          $ref: '#/components/schemas/User'
           description: user字段
       description: TokenPair字段
 paths:

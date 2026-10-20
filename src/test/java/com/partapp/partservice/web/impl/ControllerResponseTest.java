@@ -39,7 +39,7 @@ class ControllerResponseTest {
     MockHttpServletRequest request = new MockHttpServletRequest();
     request.setAttribute("requestId", "request-123");
     RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
-    AuthApiDelegate delegate = new AuthControllerImpl(repository);
+    AuthApiDelegate delegate = new AuthControllerImpl(repository, null);
 
     ApiResponseSendCode response = delegate.sendCode(
         new SendCodeRequest("email", "user@example.com", "login")).getBody();

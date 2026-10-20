@@ -8,6 +8,7 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 import com.partapp.partservice.api.Requests;
+import com.partapp.partservice.persistence.repository.GlobalDictionaryRepository;
 import com.partapp.partservice.persistence.repository.UserRepository;
 import com.partapp.partservice.persistence.repository.UserRepository.TokenPair;
 import com.partapp.partservice.persistence.repository.UserRepository.User;
@@ -18,9 +19,11 @@ import com.partapp.partservice.web.generated.model.*;
 @Service
 class AuthControllerImpl implements AuthApiDelegate {
   private final UserRepository userRepo;
+  private final GlobalDictionaryRepository dictionaryRepo;
 
-  AuthControllerImpl(UserRepository userRepo) {
+  AuthControllerImpl(UserRepository userRepo, GlobalDictionaryRepository dictionaryRepo) {
     this.userRepo = userRepo;
+    this.dictionaryRepo = dictionaryRepo;
   }
 
   protected String authorization() {
@@ -43,7 +46,8 @@ class AuthControllerImpl implements AuthApiDelegate {
   }
 
   public TokenPair register(Requests.Register r) {
-    userRepo.verifyCode(r.identityType(), r.identityValue(), r.code(), "register");
+    if (dictionaryRepo.isRegisterCodeVerificationEnabled())
+      userRepo.verifyCode(r.identityType(), r.identityValue(), r.code(), "register");
     String key = userRepo.identityKey(r.identityType(), r.identityValue());
     if (userRepo.hasIdentity(key))
       throw ApiException.conflict("身份已注册");

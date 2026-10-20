@@ -13,6 +13,34 @@ components:
       scheme: bearer
       bearerFormat: JWT
   parameters:
+    topicId:
+      name: topicId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+        description: 主题 ID
+      description: 主题 ID
+    cursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+        description: cursor字段
+      description: cursor字段
+    limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+        description: limit字段
+      description: limit字段
     userId:
       name: userId
       in: path
@@ -48,9 +76,50 @@ components:
           schema:
             $ref: '#/components/schemas/ApiResponseRatings'
   schemas:
+    ApiResponse:
+      type: object
+      required:
+      - code
+      - message
+      - data
+      - requestId
+      properties:
+        code:
+          type: integer
+          format: int32
+          description: 业务状态码
+        message:
+          type: string
+          description: 响应消息
+        data:
+          nullable: true
+          description: Response payload; use the operation-specific response schema
+        requestId:
+          type: string
+          description: 请求链路 ID
+      description: ApiResponse字段
+    Page:
+      type: object
+      required:
+      - items
+      - nextCursor
+      - hasMore
+      properties:
+        items:
+          type: array
+          items: {}
+          description: 列表数据
+        nextCursor:
+          type: string
+          nullable: true
+          description: 下一页游标
+        hasMore:
+          type: boolean
+          description: 是否还有更多数据
+      description: Page字段
     ApiResponseRating:
       allOf:
-      - $ref: ./components.yaml#/components/schemas/ApiResponse
+      - $ref: '#/components/schemas/ApiResponse'
       - type: object
         properties:
           data:
@@ -59,7 +128,7 @@ components:
       description: ApiResponseRating字段
     ApiResponseRatingCategories:
       allOf:
-      - $ref: ./components.yaml#/components/schemas/ApiResponse
+      - $ref: '#/components/schemas/ApiResponse'
       - type: object
         properties:
           data:
@@ -70,7 +139,7 @@ components:
       description: ApiResponseRatingCategories字段
     ApiResponseRatingSummary:
       allOf:
-      - $ref: ./components.yaml#/components/schemas/ApiResponse
+      - $ref: '#/components/schemas/ApiResponse'
       - type: object
         properties:
           data:
@@ -79,7 +148,7 @@ components:
       description: ApiResponseRatingSummary字段
     ApiResponseRatings:
       allOf:
-      - $ref: ./components.yaml#/components/schemas/ApiResponse
+      - $ref: '#/components/schemas/ApiResponse'
       - type: object
         properties:
           data:
@@ -88,7 +157,7 @@ components:
       description: ApiResponseRatings字段
     PageOfRatings:
       allOf:
-      - $ref: ./components.yaml#/components/schemas/Page
+      - $ref: '#/components/schemas/Page'
       properties:
         items:
           type: array
@@ -221,7 +290,7 @@ paths:
       security:
       - bearerAuth: []
       parameters:
-      - $ref: ./components.yaml#/components/parameters/topicId
+      - $ref: '#/components/parameters/topicId'
       requestBody:
         required: true
         content:
@@ -247,8 +316,8 @@ paths:
       operationId: listUserRatings
       parameters:
       - $ref: '#/components/parameters/userId'
-      - $ref: ./components.yaml#/components/parameters/cursor
-      - $ref: ./components.yaml#/components/parameters/limit
+      - $ref: '#/components/parameters/cursor'
+      - $ref: '#/components/parameters/limit'
       responses:
         '200':
           $ref: '#/components/responses/RatingsResponse'
