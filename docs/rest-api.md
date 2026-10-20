@@ -31,6 +31,7 @@
 | POST | `/auth/refresh` | body `{refresh_token}`，返回新 access token |
 | POST | `/auth/logout` | 撤销当前 refresh token |
 | GET | `/me` | 当前用户资料 |
+| DELETE | `/me` | 注销当前账号，无请求体；永久删除账号、身份、全部令牌及关联业务数据，释放邮箱/手机号供重新注册；HTTP 200、`code=0`、`data={}` |
 | PATCH | `/me` | 修改 `nickname,gender,birth_date,avatar_url` |
 | PATCH | `/me/community` | body `{community_id}`；7 天内切换返回 `40901` |
 | GET | `/communities` | 获取可用社区 |

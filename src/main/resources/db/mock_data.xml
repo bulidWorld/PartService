@@ -1,0 +1,326 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<database name="part-service" source="mock_data.xml" dialect="postgresql">
+  <!--
+    开发/测试样例。scripts/sync_schema.py 会自动发现本文件，在建表和默认字典之后导入。
+    导入方式：python3 scripts/sync_schema.py（沿用脚本已有的 DB_URL 等连接配置）。
+    本文件只追加缺少的样例，不覆盖已存在或已被 HTTP 操作修改的记录，不清理业务数据。
+    所有样例使用固定 UUID，整组数据在一个 statement 中原子写入，可重复执行。
+
+    UUID 格式：下列前缀 + 0000-4000-8000- + 十二位序号。
+    社区前缀 10000000，用户 20000000，身份 21000000，主题 30000000，
+    收件记录 31000000，邀请 40000000，聊天室 50000000，消息 60000000，
+    评价 70000000，人工评级 80000000。
+
+    社区：1=Mock社区A，2=Mock社区B，3=Mock社区C，4=Mock停用社区。
+    用户及手机号（均不占用测试用例的邮箱和 1390000000x 手机号）：
+      1 / 13888000001：发布者，社区A，男，26岁，冷却已满。
+      2 / 13888000002：已参与用户，社区A，女，24岁，冷却已满。
+      3 / 13888000003：待邀请用户，社区A，男，30岁，冷却已满。
+      4 / 13888000004：跨社区用户，社区B，女，26岁，冷却已满。
+      5 / 13888000005：未完善资料，社区A，性别/出生日期为空。
+      6 / 13888000006：封禁用户，社区A，status=blocked。
+      7 / 13888000007：冷却期用户，社区A，男，28岁，最近切换距导入1天。
+      8 / 13888000008：年龄边界用户，社区A，女，导入时18岁。
+    年龄、社区冷却和未来过期时间均以首次导入日期为基准，不会在重复导入时重置。
+
+    主题与聊天室使用相同序号：
+      1=开放/不限条件，2=开放/18至35岁女性，3=已关闭/可查聊天和互评，
+      4=已过期，5=社区B开放主题，6=已取消。
+    主题1：用户2已接受、用户3待处理、用户5已拒绝。
+    主题2：用户2已接受、用户8待处理；可测试年龄、性别匹配和跨房间操作。
+    主题3：用户2、3已接受，含6条双向评价及对应分类、统计。
+    主题4：用户5的邀请已过期。另有10条文本消息，其中1条已撤回。
+    人工评级只用于展示状态，evidence.mock=true，不是自动评级算法结论。
+
+    用户状态同时写入 service_state 的 users/identities 命名空间，兼容当前认证实现。
+    不预置验证码、访问令牌、刷新令牌，也不修改 register_verify_code 配置。
+    HTTP 登录：先 POST /api/v1/auth/send-code，参数 identityType=phone、
+    identityValue=上述手机号、purpose=login；再 POST /api/v1/auth/login。
+    当前开发实现发送固定数字验证码 000000，登录填写该值；验证码开关只影响注册。
+
+    数据导入不会补齐未实现的接口：当前社区列表、评价摘要仍返回占位结果，
+    评价分类关联及已接受邀请的 roomId 也受现有映射限制，应按实际接口记录缺陷。
+    这些样例供有数据场景使用，不属于 docs/test-case 中要求无业务数据的初态。
+  -->
+  <statements>
+    <statement id="mock-data-v1">
+      <description>幂等创建多社区用户、各状态主题邀请、聊天消息、互评及认证状态样例</description>
+      <sql><![CDATA[
+DO $mock_data$
+BEGIN
+  -- 基础字典保留已有配置；额外提供一个停用分类，避免修改默认启用分类。
+  INSERT INTO community (id, name, status) VALUES
+    ('10000000-0000-4000-8000-000000000001', 'Mock社区A', 'active'),
+    ('10000000-0000-4000-8000-000000000002', 'Mock社区B', 'active'),
+    ('10000000-0000-4000-8000-000000000003', 'Mock社区C', 'active'),
+    ('10000000-0000-4000-8000-000000000004', 'Mock停用社区', 'inactive')
+  ON CONFLICT DO NOTHING;
+
+  INSERT INTO rating_category (code, name, polarity, is_active, sort_order) VALUES
+    ('reliable', '守信', 'positive', true, 10),
+    ('punctual', '准时', 'positive', true, 20),
+    ('friendly', '友善', 'positive', true, 40),
+    ('average', '一般', 'neutral', true, 60),
+    ('no_show', '失约', 'negative', true, 80),
+    ('late', '迟到', 'negative', true, 90),
+    ('mock_disabled', 'Mock已停用分类', 'neutral', false, 999)
+  ON CONFLICT DO NOTHING;
+
+  INSERT INTO "user"
+    (id, nickname, community_id, gender, birth_date, status,
+     community_changed_at, created_at, updated_at)
+  SELECT
+    ('20000000-0000-4000-8000-' || lpad(seed.n::text, 12, '0'))::uuid,
+    seed.nickname,
+    ('10000000-0000-4000-8000-' || lpad(seed.community_n::text, 12, '0'))::uuid,
+    seed.gender,
+    CASE WHEN seed.age IS NULL THEN NULL
+         ELSE (CURRENT_DATE - make_interval(years => seed.age))::date END,
+    seed.status,
+    now() - make_interval(days => seed.cooldown_days),
+    now() - interval '30 days', now() - interval '1 day'
+  FROM (VALUES
+    (1, 'Mock发布者',      1, 'male',   26,   'active',  10),
+    (2, 'Mock已参与用户',  1, 'female', 24,   'active',  10),
+    (3, 'Mock待邀请用户',  1, 'male',   30,   'active',  10),
+    (4, 'Mock跨社区用户',  2, 'female', 26,   'active',  10),
+    (5, 'Mock未完善资料',  1, NULL,     NULL, 'active',  10),
+    (6, 'Mock封禁用户',    1, 'other',  25,   'blocked', 10),
+    (7, 'Mock冷却期用户',  1, 'male',   28,   'active',   1),
+    (8, 'Mock年龄边界用户',1, 'female', 18,   'active',  10)
+  ) AS seed(n, nickname, community_n, gender, age, status, cooldown_days)
+  ON CONFLICT DO NOTHING;
+
+  INSERT INTO user_identity
+    (id, user_id, identity_type, identity_value, verified_at, is_primary, created_at)
+  SELECT
+    ('21000000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid,
+    ('20000000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid,
+    'phone', '1388800000' || n::text,
+    now() - interval '30 days', true, now() - interval '30 days'
+  FROM generate_series(1, 8) AS seed(n)
+  ON CONFLICT DO NOTHING;
+
+  -- 登录和注册的身份判断会读取 service_state，不能只准备 user 表。
+  INSERT INTO service_state (namespace, state_key, state_value)
+  SELECT 'users', u.id::text,
+    jsonb_build_object(
+      'id', u.id, 'nickname', u.nickname, 'communityId', u.community_id,
+      'gender', u.gender, 'birthDate', u.birth_date, 'avatarUrl', u.avatar_url,
+      'status', u.status, 'communityChangedAt', u.community_changed_at)
+  FROM "user" u
+  WHERE u.id IN (
+    SELECT ('20000000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid
+    FROM generate_series(1, 8) AS seed(n))
+  ON CONFLICT DO NOTHING;
+
+  INSERT INTO service_state (namespace, state_key, state_value)
+  SELECT 'identities', i.identity_type || ':' || lower(trim(i.identity_value)),
+         to_jsonb(i.user_id::text)
+  FROM user_identity i
+  WHERE i.id IN (
+    SELECT ('21000000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid
+    FROM generate_series(1, 8) AS seed(n))
+  ON CONFLICT DO NOTHING;
+
+  INSERT INTO topic
+    (id, publisher_id, community_id, title, detail, constraint_json,
+     status, expires_at, created_at, updated_at)
+  SELECT
+    ('30000000-0000-4000-8000-' || lpad(seed.n::text, 12, '0'))::uuid,
+    ('20000000-0000-4000-8000-' || lpad(seed.owner_n::text, 12, '0'))::uuid,
+    ('10000000-0000-4000-8000-' || lpad(seed.community_n::text, 12, '0'))::uuid,
+    seed.title, seed.detail, seed.constraints::jsonb, seed.status,
+    CASE WHEN seed.status = 'open' THEN now() + interval '30 days'
+         WHEN seed.status = 'expired' THEN now() - interval '1 day'
+         ELSE NULL END,
+    now() - make_interval(days => seed.days_ago),
+    now() - interval '1 day'
+  FROM (VALUES
+    (1, 1, 1, 'Mock不限条件散步', '社区A开放主题，可测试邀请、接受和聊天。',
+     '{"genders":[]}', 'open', 3),
+    (2, 1, 1, 'Mock年龄性别约束', '18至35岁女性，可测试边界和资料匹配。',
+     '{"minAge":18,"maxAge":35,"genders":["female"]}', 'open', 2),
+    (3, 1, 1, 'Mock已结束桌游', '已关闭主题，原成员仍可查看聊天并互评。',
+     '{"genders":[]}', 'closed', 7),
+    (4, 1, 1, 'Mock已过期活动', '过期状态及过期邀请样例。',
+     '{"genders":[]}', 'expired', 5),
+    (5, 4, 2, 'Mock社区B活动', '用于跨社区列表、详情及邀请隔离测试。',
+     '{"genders":[]}', 'open', 3),
+    (6, 1, 1, 'Mock已取消活动', '已取消状态和历史聊天室样例。',
+     '{"genders":[]}', 'cancelled', 5)
+  ) AS seed(n, owner_n, community_n, title, detail, constraints, status, days_ago)
+  ON CONFLICT DO NOTHING;
+
+  INSERT INTO topic_recipient (id, topic_id, user_id, match_reason, created_at)
+  SELECT
+    ('31000000-0000-4000-8000-' || lpad(seed.n::text, 12, '0'))::uuid,
+    ('30000000-0000-4000-8000-' || lpad(seed.topic_n::text, 12, '0'))::uuid,
+    ('20000000-0000-4000-8000-' || lpad(seed.user_n::text, 12, '0'))::uuid,
+    jsonb_build_object('mock', true, 'communityMatched', true),
+    now() - interval '1 day'
+  FROM (VALUES
+    (1, 1, 2), (2, 1, 3), (3, 1, 5), (4, 1, 7), (5, 1, 8),
+    (6, 2, 2), (7, 2, 8)
+  ) AS seed(n, topic_n, user_n)
+  ON CONFLICT DO NOTHING;
+
+  INSERT INTO topic_invitation
+    (id, topic_id, invitee_id, inviter_id, status, responded_at, created_at, updated_at)
+  SELECT
+    ('40000000-0000-4000-8000-' || lpad(seed.n::text, 12, '0'))::uuid,
+    ('30000000-0000-4000-8000-' || lpad(seed.topic_n::text, 12, '0'))::uuid,
+    ('20000000-0000-4000-8000-' || lpad(seed.user_n::text, 12, '0'))::uuid,
+    '20000000-0000-4000-8000-000000000001'::uuid, seed.status,
+    CASE WHEN seed.status IN ('accepted', 'rejected')
+         THEN now() - interval '1 day 12 hours' ELSE NULL END,
+    now() - interval '1 day 18 hours', now() - interval '1 day'
+  FROM (VALUES
+    (1, 1, 2, 'accepted'), (2, 1, 3, 'pending'), (3, 1, 5, 'rejected'),
+    (4, 2, 2, 'accepted'), (5, 2, 8, 'pending'),
+    (6, 3, 2, 'accepted'), (7, 3, 3, 'accepted'),
+    (8, 4, 5, 'expired')
+  ) AS seed(n, topic_n, user_n, status)
+  ON CONFLICT DO NOTHING;
+
+  INSERT INTO topic_participant (topic_id, user_id, source, joined_at)
+  SELECT
+    ('30000000-0000-4000-8000-' || lpad(seed.topic_n::text, 12, '0'))::uuid,
+    ('20000000-0000-4000-8000-' || lpad(seed.user_n::text, 12, '0'))::uuid,
+    seed.source, now() - interval '1 day 12 hours'
+  FROM (VALUES
+    (1, 1, 'publisher'), (1, 2, 'invitation'),
+    (2, 1, 'publisher'), (2, 2, 'invitation'),
+    (3, 1, 'publisher'), (3, 2, 'invitation'), (3, 3, 'invitation'),
+    (4, 1, 'publisher'), (5, 4, 'publisher'), (6, 1, 'publisher')
+  ) AS seed(topic_n, user_n, source)
+  ON CONFLICT DO NOTHING;
+
+  INSERT INTO chat_room (id, topic_id, name, status, created_at, closed_at)
+  SELECT
+    ('50000000-0000-4000-8000-' || lpad(seed.n::text, 12, '0'))::uuid,
+    t.id, t.title || '聊天室',
+    CASE WHEN t.status = 'cancelled' THEN 'closed' ELSE 'active' END,
+    t.created_at,
+    CASE WHEN t.status = 'cancelled' THEN t.updated_at ELSE NULL END
+  FROM generate_series(1, 6) AS seed(n)
+  JOIN topic t ON t.id =
+    ('30000000-0000-4000-8000-' || lpad(seed.n::text, 12, '0'))::uuid
+  ON CONFLICT DO NOTHING;
+
+  INSERT INTO chat_message
+    (id, room_id, sender_id, client_message_id, message_type, content,
+     content_meta, recalled_at, created_at)
+  SELECT
+    ('60000000-0000-4000-8000-' || lpad(seed.n::text, 12, '0'))::uuid,
+    ('50000000-0000-4000-8000-' || lpad(seed.room_n::text, 12, '0'))::uuid,
+    ('20000000-0000-4000-8000-' || lpad(seed.user_n::text, 12, '0'))::uuid,
+    'mock-message-' || seed.n::text, 'text', seed.content, '{}'::jsonb,
+    CASE WHEN seed.recalled THEN now() - interval '1 day' ELSE NULL END,
+    now() - interval '1 day 1 hour' + make_interval(secs => seed.n)
+  FROM (VALUES
+    (1, 1, 1, '大家好，公园东门集合。', false),
+    (2, 1, 2, '收到，我会准时到。', false),
+    (3, 1, 1, '有变化在这里沟通。', false),
+    (4, 2, 1, '这是有年龄和性别限制的活动。', false),
+    (5, 2, 2, '已确认活动安排。', false),
+    (6, 3, 1, '桌游活动开始前先确认人数。', false),
+    (7, 3, 2, '我已到达活动室。', false),
+    (8, 3, 3, '这条消息已撤回，仅用于状态测试。', true),
+    (9, 3, 1, '活动已结束，感谢参与。', false),
+    (10,5, 4, '这是社区B的聊天内容。', false)
+  ) AS seed(n, room_n, user_n, content, recalled)
+  ON CONFLICT DO NOTHING;
+
+  INSERT INTO chat_member (room_id, user_id, role, joined_at, last_read_message_id)
+  SELECT
+    r.id, p.user_id,
+    CASE WHEN p.source = 'publisher' THEN 'owner' ELSE 'member' END,
+    p.joined_at,
+    CASE WHEN r.id = '50000000-0000-4000-8000-000000000001'::uuid
+         THEN '60000000-0000-4000-8000-000000000003'::uuid ELSE NULL END
+  FROM topic_participant p
+  JOIN chat_room r ON r.topic_id = p.topic_id
+  WHERE p.topic_id IN (
+    SELECT ('30000000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid
+    FROM generate_series(1, 6) AS seed(n))
+    AND p.left_at IS NULL
+  ON CONFLICT DO NOTHING;
+
+  INSERT INTO chat_message_read (room_id, user_id, last_read_message_id, read_at)
+  SELECT m.room_id, m.user_id, m.last_read_message_id, now() - interval '1 day'
+  FROM chat_member m
+  WHERE m.room_id = '50000000-0000-4000-8000-000000000001'::uuid
+    AND m.last_read_message_id IS NOT NULL
+  ON CONFLICT DO NOTHING;
+
+  INSERT INTO rating
+    (id, topic_id, from_user_id, to_user_id, score, comment, created_at, updated_at)
+  SELECT
+    ('70000000-0000-4000-8000-' || lpad(seed.n::text, 12, '0'))::uuid,
+    '30000000-0000-4000-8000-000000000003'::uuid,
+    ('20000000-0000-4000-8000-' || lpad(seed.from_n::text, 12, '0'))::uuid,
+    ('20000000-0000-4000-8000-' || lpad(seed.to_n::text, 12, '0'))::uuid,
+    seed.score, seed.comment,
+    now() - interval '12 hours' + make_interval(secs => seed.n),
+    now() - interval '12 hours' + make_interval(secs => seed.n)
+  FROM (VALUES
+    (1, 1, 2, 'good', '守信且准时。'),
+    (2, 2, 1, 'neutral', '总体体验一般。'),
+    (3, 3, 1, 'good', '组织清晰，为人友善。'),
+    (4, 1, 3, 'bad', '没有按约定参加最后一轮。'),
+    (5, 2, 3, 'good', '活动中沟通友善。'),
+    (6, 3, 2, 'bad', '到场时间晚于约定。')
+  ) AS seed(n, from_n, to_n, score, comment)
+  ON CONFLICT DO NOTHING;
+
+  INSERT INTO rating_category_item (rating_id, category_id)
+  SELECT
+    ('70000000-0000-4000-8000-' || lpad(seed.rating_n::text, 12, '0'))::uuid,
+    c.id
+  FROM (VALUES
+    (1, 'reliable'), (1, 'punctual'), (2, 'average'),
+    (3, 'reliable'), (3, 'friendly'), (4, 'no_show'),
+    (5, 'friendly'), (6, 'late')
+  ) AS seed(rating_n, category_code)
+  JOIN rating_category c ON c.code = seed.category_code
+  ON CONFLICT DO NOTHING;
+
+  -- 从实际评价计算统计，避免手填计数与评分样本不一致；重复导入不重置现有统计。
+  INSERT INTO user_rating_stat
+    (user_id, good_count, neutral_count, bad_count, total_count,
+     good_rate, bad_rate, calculated_at, algorithm_version)
+  SELECT to_user_id,
+    count(*) FILTER (WHERE score = 'good'),
+    count(*) FILTER (WHERE score = 'neutral'),
+    count(*) FILTER (WHERE score = 'bad'), count(*),
+    round(count(*) FILTER (WHERE score = 'good')::numeric / count(*), 4),
+    round(count(*) FILTER (WHERE score = 'bad')::numeric / count(*), 4),
+    now(), 'mock-v1'
+  FROM rating
+  WHERE to_user_id IN (
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '20000000-0000-4000-8000-000000000002'::uuid,
+    '20000000-0000-4000-8000-000000000003'::uuid)
+    AND deleted_at IS NULL
+  GROUP BY to_user_id
+  ON CONFLICT DO NOTHING;
+
+  INSERT INTO user_risk_tag
+    (id, user_id, tag_code, source, confidence, evidence, status, created_at, removed_at)
+  VALUES
+    ('80000000-0000-4000-8000-000000000001',
+     '20000000-0000-4000-8000-000000000003', 'mock_review_hint', 'manual', NULL,
+     '{"mock":true,"description":"人工展示样例，不代表算法判定"}',
+     'active', now() - interval '6 hours', NULL),
+    ('80000000-0000-4000-8000-000000000002',
+     '20000000-0000-4000-8000-000000000002', 'mock_review_hint', 'manual', NULL,
+     '{"mock":true,"description":"已移除的人工展示样例"}',
+     'removed', now() - interval '12 hours', now() - interval '6 hours')
+  ON CONFLICT DO NOTHING;
+END;
+$mock_data$
+      ]]></sql>
+    </statement>
+  </statements>
+</database>
