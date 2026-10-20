@@ -14,6 +14,12 @@ components:
       bearerFormat: JWT
   parameters: {}
   responses:
+    EmptyResponse:
+      description: Account and associated data deleted
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResponseEmpty'
     CommunitiesResponse:
       description: Available communities
       content:
@@ -27,6 +33,14 @@ components:
           schema:
             $ref: '#/components/schemas/ApiResponseUser'
   schemas:
+    ApiResponseEmpty:
+      allOf:
+      - $ref: '#/components/schemas/ApiResponse'
+      - type: object
+        properties:
+          data:
+            type: object
+            additionalProperties: false
     ApiResponse:
       type: object
       required:
@@ -152,6 +166,19 @@ components:
       description: Community字段
 paths:
   /me:
+    delete:
+      tags:
+      - Users
+      operationId: deleteCurrentUser
+      summary: 注销当前账号并永久删除关联数据
+      description: 删除当前用户、身份、验证码及全部会话；同时删除其发布的主题及关联数据，以及其参与、邀请、消息和评价。不接受目标用户 ID。身份释放后可重新注册。
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          $ref: '#/components/responses/EmptyResponse'
+        '401':
+          description: Missing or invalid access token
     get:
       tags:
       - Users

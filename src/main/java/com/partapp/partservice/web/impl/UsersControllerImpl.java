@@ -10,6 +10,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 
 import com.partapp.partservice.api.Requests;
 import com.partapp.partservice.persistence.repository.UserRepository;
+import com.partapp.partservice.persistence.repository.AccountDeletionService;
 import com.partapp.partservice.persistence.repository.UserRepository.User;
 import com.partapp.partservice.web.ApiException;
 import com.partapp.partservice.web.generated.api.UsersApiDelegate;
@@ -18,7 +19,11 @@ import com.partapp.partservice.web.generated.model.*;
 @Service
 class UsersControllerImpl implements UsersApiDelegate {
   private final UserRepository userRepo;
-  UsersControllerImpl(UserRepository userRepo) { this.userRepo = userRepo; }
+  private final AccountDeletionService accountDeletion;
+  UsersControllerImpl(UserRepository userRepo, AccountDeletionService accountDeletion) {
+    this.userRepo = userRepo;
+    this.accountDeletion = accountDeletion;
+  }
   protected String authorization() {
     ServletRequestAttributes a=(ServletRequestAttributes)RequestContextHolder.getRequestAttributes(); return a==null?null:a.getRequest().getHeader("Authorization");
   }
@@ -51,6 +56,11 @@ class UsersControllerImpl implements UsersApiDelegate {
     userRepo.putUser(id, n);
     userRepo.update(n);
     return n;
+  }
+  @Override
+  public ResponseEntity<ApiResponseEmpty> deleteCurrentUser() {
+    accountDeletion.deleteCurrentUser(authorization());
+    return ResponseEntity.ok(new ApiResponseEmpty(0, "ok", Map.of(), requestId()));
   }
   @Override
   public ResponseEntity<ApiResponseUser> getCurrentUser() {
