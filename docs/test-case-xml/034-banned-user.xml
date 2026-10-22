@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<task name="TC-034 封禁账号不能执行受保护业务">
+  <!-- BASE_URL 由导入项目配置为 http://127.0.0.1:10201/api/v1。
+       HTTP 接口缺口：无封禁账号接口，禁止通过后台修改状态；社区查询成功不代表目标场景通过。
+       本任务只读、不注册账号、不产生业务数据，因此无需 finally 注销。 -->
+  <taskStep order="10">
+    <rest method="GET" path="/communities">
+      <header><name>Accept</name><value>application/json</value></header>
+      <auth mode="none"/>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if statusCode != 200 or not isinstance(responseBody, dict) or responseBody.get("code") != 0:
+        raise Blocked("TC-034 准备查询失败：GET /communities 预期 HTTP 200、业务码 0；缺少封禁用户 HTTP 接口，目标场景仍阻塞")
+    if not isinstance(responseBody.get("data"), list):
+        raise Blocked("TC-034 社区查询数据不可用；缺少封禁用户 HTTP 接口，目标场景仍阻塞")
+    raise Blocked("TC-034 已核查公开 GET /communities（HTTP 200、业务码 0）；公开契约无封禁用户 HTTP 接口，无法独立准备封禁账号及验证受保护业务拒绝行为；查询成功不得判定目标场景通过")
+]]></assertionCode>
+    </rest>
+  </taskStep>
+</task>

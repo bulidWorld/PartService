@@ -1,0 +1,28 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<task name="TC-003 身份类型不支持">
+  <!-- 独立测试环境；项目 base_url 配置为 http://127.0.0.1:10201/api/v1。
+       仅执行源用例的匿名负向请求，不需要社区、账号或令牌准备。
+       无验证码投递/账号存在性公开查询；这些副作用不计为已验证。 -->
+  <taskStep order="10">
+    <rest method="POST" path="/auth/send-code">
+      <header><name>Accept</name><value>application/json</value></header>
+      <header><name>Content-Type</name><value>application/json</value></header>
+      <auth mode="none"/>
+      <rawBody>{"identityType":"wechat","identityValue":"782213745@qq.com","purpose":"register"}</rawBody>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if statusCode != 400 or not isinstance(responseBody, dict):
+        return False
+    if not (isinstance(responseBody.get('code'), int) and (not isinstance(responseBody.get('code'), bool))) or responseBody['code'] != 40001:
+        return False
+    message = responseBody.get('message')
+    request_id = responseBody.get('requestId')
+    if not isinstance(message, str) or not isinstance(request_id, str) or (not request_id.strip()):
+        return False
+    field_identified = any((value in message.lower() for value in ('identitytype', 'identity_type', '身份类型')))
+    return field_identified and 'data' in responseBody and (responseBody['data'] is None)
+]]></assertionCode>
+    </rest>
+  </taskStep>
+  <!-- 本请求无已取得的账号/令牌可供清理，不删除来源不明的账号。 -->
+</task>

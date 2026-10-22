@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<task name="TC-009 注册缺少昵称">
+  <!--
+  来源 docs/test-case/009-register-missing-nickname.md。导入项目 base_url 配置为
+  http://127.0.0.1:10201/api/v1。此文件只编码公开社区准备查询，终态必须 Blocked。
+  XSD 表达能力缺口：缺少 required nickname 的负向请求必须用 rawBody；
+  rawBody 不插值且与 body 互斥，不能引用前序响应的 COMMUNITY_A。
+  禁止硬编码社区，禁止把 {COMMUNITY_A} 当作可运行 rawBody。
+
+  以下是未编码的目标流程，仅为保留原用例要求，不代表已执行或已覆盖：
+  1. 从 GET /communities 的 data[0].id 保存 COMMUNITY_A。
+  2. POST /auth/register，JSON 字段 identityType=email、identityValue=782213745@qq.com、
+     code=246810、communityId=前序 COMMUNITY_A；故意不发送 nickname。
+     预期 HTTP 400/code=40001，message 明确参数问题，不签发 accessToken/refreshToken。
+     若意外成功，立即提取 data.user.id、data.accessToken、data.refreshToken 纳入清理。
+  3. 仅在负向响应符合预期后，POST /auth/register 使用相同 identityType、identityValue、
+     code、communityId，加 nickname=测试用户A。预期 HTTP 200/code=0，立即提取用户 ID、
+     accessToken 和 refreshToken。此请求确认之前失败没有占用身份。
+  4. GET /me，使用新账号 accessToken；预期 HTTP 200/code=0，用户 ID、昵称及社区一致。
+  5. 必执行 finally：对所有本次实际创建的不同用户 ID 分别处理；令牌过期时先
+     POST /auth/refresh，保存所有原始及新签发令牌，用本人最新 accessToken DELETE /me。
+     断言 HTTP 200/code=0、data={}、requestId 非空；随后对每个访问令牌 GET /me，
+     对每个刷新令牌 POST /auth/refresh，均断言 HTTP 401/code=40101。
+     一个用户失败仍处理其他用户；保存脱敏 HTTP/业务码、requestId 和清理结论。
+     清理失败或未确认须停止后续用例及相同邮箱复用。原用例独立空环境前提由执行器保证。
+  本 XML 不发送注册请求，不创建账号，因此没有可运行的 finally；上述清理仅为未编码要求。
+  -->
+  <taskStep order="10">
+    <rest method="GET" path="/communities">
+      <header><name>Accept</name><value>application/json</value></header>
+      <auth mode="none"/>
+      <assertionCode><![CDATA[def assert_response(responseBody, globalParam, statusCode, headers):
+    if statusCode != 200 or not isinstance(responseBody, dict) or responseBody.get("code") != 0:
+        raise Blocked("社区准备查询失败；未执行缺少昵称场景")
+    data = responseBody.get("data")
+    if not isinstance(data, list) or not data:
+        raise Blocked("无可用社区，公开 HTTP 没有社区创建接口；未执行缺少昵称场景")
+    if not isinstance(data[0], dict) or not data[0].get("id"):
+        raise Blocked("社区 ID 不可取得；未执行缺少昵称场景")
+    raise Blocked("XSD rawBody 不支持动态参数且与 body 互斥，无法仅遗漏 nickname 并携带真实社区 ID；目标注册、查询及清理流程未编码")
+]]></assertionCode>
+      <extractParam><name>COMMUNITY_A</name><value>data[0].id</value></extractParam>
+    </rest>
+  </taskStep>
+</task>

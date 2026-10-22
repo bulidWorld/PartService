@@ -9,6 +9,9 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 import com.partapp.partservice.api.Requests;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.partapp.partservice.persistence.entity.CommunityEntity;
+import com.partapp.partservice.persistence.mapper.CommunityMapper;
 import com.partapp.partservice.persistence.repository.UserRepository;
 import com.partapp.partservice.persistence.repository.AccountDeletionService;
 import com.partapp.partservice.persistence.repository.UserRepository.User;
@@ -20,9 +23,11 @@ import com.partapp.partservice.web.generated.model.*;
 class UsersControllerImpl implements UsersApiDelegate {
   private final UserRepository userRepo;
   private final AccountDeletionService accountDeletion;
-  UsersControllerImpl(UserRepository userRepo, AccountDeletionService accountDeletion) {
+  private final CommunityMapper communityMapper;
+  UsersControllerImpl(UserRepository userRepo, AccountDeletionService accountDeletion, CommunityMapper communityMapper) {
     this.userRepo = userRepo;
     this.accountDeletion = accountDeletion;
+    this.communityMapper = communityMapper;
   }
   protected String authorization() {
     ServletRequestAttributes a=(ServletRequestAttributes)RequestContextHolder.getRequestAttributes(); return a==null?null:a.getRequest().getHeader("Authorization");
@@ -76,6 +81,10 @@ class UsersControllerImpl implements UsersApiDelegate {
   }
   @Override
   public ResponseEntity<ApiResponseCommunities> listCommunities() {
-    return ResponseEntity.ok(new ApiResponseCommunities(0, "ok", List.of(), requestId()));
+    List<Community> communities = communityMapper.selectList(new QueryWrapper<CommunityEntity>()
+        .eq("status", "active").orderByAsc("name", "id")).stream()
+        .map(entity -> new Community().id(entity.id).name(entity.name))
+        .toList();
+    return ResponseEntity.ok(new ApiResponseCommunities(0, "ok", communities, requestId()));
   }
 }

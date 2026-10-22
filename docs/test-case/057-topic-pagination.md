@@ -116,7 +116,7 @@ Authorization: Bearer {{TOKEN_A}}
 
 ## 期待结果
 
-- 所有响应包含 `code`、`message`、`data`、非空 `requestId`；成功按 OpenAPI 为 HTTP 200、`code=0`。失败不泄露堆栈或凭证明文。
+
 - 各步骤先核对其预期再继续；准备请求失败或变量无法取得时停止后续业务步骤并记录阻塞，行为与预期不符时记录失败；结束前仍须清理本用例已创建的全部用户。
 - 仅判定本文件 HTTP 请求可以观察的结果；没有 HTTP 查询能力的内部存储、广播、日志等项目不计为已验证。
 - 两页并集恰好包含 T1、T2、T3，交集为空；末页 1 条、hasMore=false、nextCursor=null。

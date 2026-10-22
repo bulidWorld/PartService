@@ -85,23 +85,31 @@ class AuthControllerImpl implements AuthApiDelegate {
 
   @Override
   public ResponseEntity<ApiResponseSendCode> sendCode(SendCodeRequest x) {
-    return ResponseEntity.ok(new ApiResponseSendCode(0, "ok", sendCode(new Requests.SendCode(x.getIdentityType(), x.getIdentityValue(), x.getPurpose())), requestId()));
+    return ResponseEntity.ok(new ApiResponseSendCode(0, "ok",
+        sendCode(new Requests.SendCode(x.getIdentityType(), x.getIdentityValue(), x.getPurpose())), requestId()));
   }
 
   @Override
   public ResponseEntity<ApiResponseTokenPair> register(RegisterRequest x) {
-    return ResponseEntity.ok(new ApiResponseTokenPair(0, "ok", ApiModelMapper.tokenPair(register(new Requests.Register(x.getIdentityType(), x.getIdentityValue(), x.getCode(), x.getNickname(),
-        x.getCommunityId()))), requestId()));
+    return ResponseEntity.ok(new ApiResponseTokenPair(0, "ok",
+        ApiModelMapper.tokenPair(
+            register(new Requests.Register(x.getIdentityType(), x.getIdentityValue(), x.getCode(), x.getNickname(),
+                x.getCommunityId()))),
+        requestId()));
   }
 
   @Override
   public ResponseEntity<ApiResponseTokenPair> login(LoginRequest x) {
-    return ResponseEntity.ok(new ApiResponseTokenPair(0, "ok", ApiModelMapper.tokenPair(login(new Requests.Login(x.getIdentityType(), x.getIdentityValue(), x.getCode(), x.getDeviceId()))), requestId()));
+    return ResponseEntity.ok(new ApiResponseTokenPair(0, "ok",
+        ApiModelMapper.tokenPair(
+            login(new Requests.Login(x.getIdentityType(), x.getIdentityValue(), x.getCode(), x.getDeviceId()))),
+        requestId()));
   }
 
   @Override
   public ResponseEntity<ApiResponseTokenPair> refresh(RefreshRequest x) {
-    return ResponseEntity.ok(new ApiResponseTokenPair(0, "ok", ApiModelMapper.tokenPair(refresh(x.getRefreshToken())), requestId()));
+    return ResponseEntity
+        .ok(new ApiResponseTokenPair(0, "ok", ApiModelMapper.tokenPair(refresh(x.getRefreshToken())), requestId()));
   }
 
   @Override

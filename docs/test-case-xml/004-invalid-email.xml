@@ -1,0 +1,30 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!-- TC-004：导入项目 base_url 应设置为 http://127.0.0.1:10201/api/v1 或隔离环境地址。
+     不创建测试身份，无共享令牌、准备数据或账号清理。侧效应观测缺口见 notes/004.md。 -->
+<task name="TC-004 邮箱格式错误">
+  <taskStep order="10">
+    <rest method="POST" path="/auth/send-code">
+      <header><name>Accept</name><value>application/json</value></header>
+      <header><name>Content-Type</name><value>application/json</value></header>
+      <auth mode="none"/>
+      <!-- 原样发送负向值；不让接口请求 Schema 校验代替被测服务校验。 -->
+      <rawBody>{"identityType":"email","identityValue":"not-an-email","purpose":"register"}</rawBody>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if statusCode != 400 or not isinstance(responseBody, dict):
+        return False
+    if not (isinstance(responseBody.get('code'), int) and (not isinstance(responseBody.get('code'), bool))) or responseBody['code'] != 40001:
+        return False
+    if not all((key in responseBody for key in ('code', 'message', 'data', 'requestId'))):
+        return False
+    if not isinstance(responseBody['requestId'], str) or not responseBody['requestId'].strip():
+        return False
+    message = responseBody.get('message')
+    if not isinstance(message, str) or not message.strip():
+        return False
+    details = (message + ' ' + str(responseBody.get('data'))).lower()
+    return any((field in details for field in ('identityvalue', 'email', '邮箱')))
+]]></assertionCode>
+    </rest>
+  </taskStep>
+</task>

@@ -1,0 +1,378 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<task name="TC-054 主题流默认只包含开放主题">
+  <!--base_url=http://127.0.0.1:10201/api/v1，由项目配置。身份跨任务串行及清理失败停止后续任务须由执行器保证。-->
+  <taskStep order="10">
+    <rest method="GET" path="/communities">
+      <header>
+        <name>Accept</name>
+        <value>application/json</value>
+      </header>
+      <auth mode="none"/>
+      <assertionCode>def assert_response(responseBody, globalParam, statusCode, headers):
+    if statusCode != 200 or not isinstance(responseBody, dict) or responseBody.get("code") != 0:
+        raise Blocked("社区准备请求失败")
+    if not responseBody.get("data"):
+        raise Blocked("无可用社区，公开 HTTP 没有创建接口")
+    if not responseBody["data"][0].get("id"):
+        raise Blocked("社区 ID 不可取得")
+    return True
+</assertionCode>
+      <extractParam>
+        <name>COMMUNITY_A</name>
+        <value>data[0].id</value>
+      </extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="20">
+    <rest method="POST" path="/auth/register">
+      <header>
+        <name>Accept</name>
+        <value>application/json</value>
+      </header>
+      <header>
+        <name>Content-Type</name>
+        <value>application/json</value>
+      </header>
+      <auth mode="none"/>
+      <body>
+        <kv>
+          <key>identityType</key>
+          <value>email</value>
+        </kv>
+        <kv>
+          <key>identityValue</key>
+          <value>782213745@qq.com</value>
+        </kv>
+        <kv>
+          <key>nickname</key>
+          <value>测试用户A</value>
+        </kv>
+        <kv>
+          <key>communityId</key>
+          <parameter>COMMUNITY_A</parameter>
+        </kv>
+        <kv>
+          <key>code</key>
+          <value>246810</value>
+        </kv>
+      </body>
+      <assertionCode>def assert_response(responseBody, globalParam, statusCode, headers):
+    if statusCode != 200 or not isinstance(responseBody, dict) or responseBody.get("code") != 0:
+        raise Blocked("注册准备失败；不能删除来源不明的已有身份")
+    data = responseBody["data"]
+    assert data["user"]["id"] and data["accessToken"] and data["refreshToken"]
+    return True
+</assertionCode>
+      <extractParam>
+        <name>USER_A</name>
+        <value>data.user.id</value>
+      </extractParam>
+      <extractParam sensitive="true">
+        <name>TOKEN_A</name>
+        <value>data.accessToken</value>
+      </extractParam>
+      <extractParam sensitive="true">
+        <name>REFRESH_A</name>
+        <value>data.refreshToken</value>
+      </extractParam>
+      <extractParam sensitive="true">
+        <name>TOKEN_A_ORIGINAL</name>
+        <value>data.accessToken</value>
+      </extractParam>
+      <extractParam sensitive="true">
+        <name>REFRESH_A_ORIGINAL</name>
+        <value>data.refreshToken</value>
+      </extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="30" ifParameter="TOKEN_A" onFalse="blocked">
+    <rest method="POST" path="/topics">
+      <header>
+        <name>Accept</name>
+        <value>application/json</value>
+      </header>
+      <header>
+        <name>Content-Type</name>
+        <value>application/json</value>
+      </header>
+      <auth mode="bearer" parameter="TOKEN_A"/>
+      <body>
+        <kv valueType="string">
+          <key>title</key>
+          <value>周末公园散步</value>
+        </kv>
+        <kv valueType="string">
+          <key>detail</key>
+          <value>公园东门集合，步行一小时。</value>
+        </kv>
+        <kv valueType="array">
+          <key>genders</key>
+          <value>[]</value>
+        </kv>
+      </body>
+      <assertionCode>def assert_response(responseBody, globalParam, statusCode, headers):
+    assert statusCode == 200 and isinstance(responseBody, dict) and responseBody.get("code") == 0
+    data = responseBody["data"]
+    assert data.get("id")
+    assert data.get("publisherId") == globalParam["USER_A"]
+    assert data.get("communityId") == globalParam["COMMUNITY_A"]
+    assert data.get("status") == "open"
+    assert data.get("title") == "周末公园散步"
+    assert data.get("detail") == "公园东门集合，步行一小时。"
+    assert data.get("genders") == []
+    assert data.get("minAge") is None and data.get("maxAge") is None and data.get("expiresAt") is None
+    assert data.get("createdAt")
+    return True
+</assertionCode>
+      <extractParam>
+        <name>T</name>
+        <value>data.id</value>
+      </extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="40" ifParameter="T" onFalse="blocked">
+    <rest method="POST" path="/topics/{topicId}/close">
+      <header>
+        <name>Accept</name>
+        <value>application/json</value>
+      </header>
+      <auth mode="bearer" parameter="TOKEN_A"/>
+      <pathParams>
+        <kv>
+          <key>topicId</key>
+          <parameter>T</parameter>
+        </kv>
+      </pathParams>
+      <assertionCode>def assert_response(responseBody, globalParam, statusCode, headers):
+    assert statusCode == 200 and isinstance(responseBody, dict) and responseBody.get("code") == 0
+    data = responseBody["data"]
+    assert data.get("id") == globalParam["T"]
+    assert data.get("publisherId") == globalParam["USER_A"]
+    assert data.get("communityId") == globalParam["COMMUNITY_A"]
+    assert data.get("status") == "closed"
+    return True
+</assertionCode>
+    </rest>
+  </taskStep>
+  <taskStep order="50" ifParameter="TOKEN_A" onFalse="blocked">
+    <rest method="POST" path="/topics">
+      <header>
+        <name>Accept</name>
+        <value>application/json</value>
+      </header>
+      <header>
+        <name>Content-Type</name>
+        <value>application/json</value>
+      </header>
+      <auth mode="bearer" parameter="TOKEN_A"/>
+      <body>
+        <kv valueType="string">
+          <key>title</key>
+          <value>周末公园散步</value>
+        </kv>
+        <kv valueType="string">
+          <key>detail</key>
+          <value>公园东门集合，步行一小时。</value>
+        </kv>
+        <kv valueType="array">
+          <key>genders</key>
+          <value>[]</value>
+        </kv>
+      </body>
+      <assertionCode>def assert_response(responseBody, globalParam, statusCode, headers):
+    assert statusCode == 200 and isinstance(responseBody, dict) and responseBody.get("code") == 0
+    data = responseBody["data"]
+    assert data.get("id")
+    assert data.get("publisherId") == globalParam["USER_A"]
+    assert data.get("communityId") == globalParam["COMMUNITY_A"]
+    assert data.get("status") == "open"
+    assert data.get("title") == "周末公园散步"
+    assert data.get("detail") == "公园东门集合，步行一小时。"
+    assert data.get("genders") == []
+    assert data.get("minAge") is None and data.get("maxAge") is None and data.get("expiresAt") is None
+    assert data.get("createdAt")
+    assert data["id"] != globalParam["T"]
+    return True
+</assertionCode>
+      <extractParam>
+        <name>T_OPEN</name>
+        <value>data.id</value>
+      </extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="60" ifParameter="T_OPEN" onFalse="blocked">
+    <rest method="GET" path="/topics">
+      <header>
+        <name>Accept</name>
+        <value>application/json</value>
+      </header>
+      <auth mode="bearer" parameter="TOKEN_A"/>
+      <queryParams>
+        <kv valueType="integer">
+          <key>limit</key>
+          <value>20</value>
+        </kv>
+      </queryParams>
+      <assertionCode>def assert_response(responseBody, globalParam, statusCode, headers):
+    assert statusCode == 200 and isinstance(responseBody, dict) and responseBody.get("code") == 0
+    data = responseBody["data"]
+    items = data.get("items")
+    assert isinstance(items, list) and len(items) == 1
+    item = items[0]
+    assert item.get("id") == globalParam["T_OPEN"]
+    assert item.get("id") != globalParam["T"]
+    assert item.get("status") == "open"
+    assert item.get("publisherId") == globalParam["USER_A"]
+    assert item.get("communityId") == globalParam["COMMUNITY_A"]
+    assert data.get("hasMore") is False
+    return True
+</assertionCode>
+    </rest>
+  </taskStep>
+  <finally>
+    <taskStep order="10" ifParameter="TOKEN_A">
+      <rest method="GET" path="/me">
+        <header>
+          <name>Accept</name>
+          <value>application/json</value>
+        </header>
+        <auth mode="bearer" parameter="TOKEN_A"/>
+        <assertionCode>def assert_response(responseBody, globalParam, statusCode, headers):
+    assert responseBody.get("requestId")
+    if statusCode == 200 and responseBody["code"] == 0:
+        assert responseBody["data"]["id"] == globalParam["USER_A"]
+        return True
+    return statusCode == 401 and responseBody["code"] == 40101
+</assertionCode>
+        <extractParam valueType="integer">
+          <name>CLEANUP_PROBE_CODE</name>
+          <value>code</value>
+        </extractParam>
+      </rest>
+    </taskStep>
+    <taskStep order="20" ifParameter="CLEANUP_PROBE_CODE" ifOperator="equals" ifValue="40101">
+      <rest method="POST" path="/auth/refresh">
+        <header>
+          <name>Accept</name>
+          <value>application/json</value>
+        </header>
+        <header>
+          <name>Content-Type</name>
+          <value>application/json</value>
+        </header>
+        <auth mode="none"/>
+        <body>
+          <kv>
+            <key>refreshToken</key>
+            <parameter>REFRESH_A</parameter>
+          </kv>
+        </body>
+        <assertionCode>def assert_response(responseBody, globalParam, statusCode, headers):
+    assert statusCode == 200 and responseBody["code"] == 0
+    assert responseBody.get("requestId")
+    assert responseBody["data"]["user"]["id"] == globalParam["USER_A"]
+    assert responseBody["data"]["accessToken"] and responseBody["data"]["refreshToken"]
+    return True
+</assertionCode>
+        <updateParam>
+          <name>TOKEN_A</name>
+          <value>data.accessToken</value>
+        </updateParam>
+        <updateParam>
+          <name>REFRESH_A</name>
+          <value>data.refreshToken</value>
+        </updateParam>
+      </rest>
+    </taskStep>
+    <taskStep order="30" ifParameter="TOKEN_A">
+      <rest method="DELETE" path="/me">
+        <header>
+          <name>Accept</name>
+          <value>application/json</value>
+        </header>
+        <auth mode="bearer" parameter="TOKEN_A"/>
+        <assertionCode>def assert_response(responseBody, globalParam, statusCode, headers):
+    assert statusCode == 200 and responseBody["code"] == 0
+    assert responseBody.get("requestId")
+    return responseBody["data"] == {}
+</assertionCode>
+        <extractParam valueType="integer">
+          <name>DELETE_CODE</name>
+          <value>code</value>
+        </extractParam>
+        <extractParam>
+          <name>DELETE_REQUEST_ID</name>
+          <value>requestId</value>
+        </extractParam>
+      </rest>
+    </taskStep>
+    <taskStep order="40" ifParameter="TOKEN_A_ORIGINAL">
+      <rest method="GET" path="/me">
+        <header>
+          <name>Accept</name>
+          <value>application/json</value>
+        </header>
+        <auth mode="bearer" parameter="TOKEN_A_ORIGINAL"/>
+        <assertionCode>def assert_response(responseBody, globalParam, statusCode, headers):
+    return statusCode == 401 and responseBody["code"] == 40101 and bool(responseBody.get("requestId"))
+</assertionCode>
+      </rest>
+    </taskStep>
+    <taskStep order="50" ifParameter="TOKEN_A">
+      <rest method="GET" path="/me">
+        <header>
+          <name>Accept</name>
+          <value>application/json</value>
+        </header>
+        <auth mode="bearer" parameter="TOKEN_A"/>
+        <assertionCode>def assert_response(responseBody, globalParam, statusCode, headers):
+    return statusCode == 401 and responseBody["code"] == 40101 and bool(responseBody.get("requestId"))
+</assertionCode>
+      </rest>
+    </taskStep>
+    <taskStep order="60" ifParameter="REFRESH_A_ORIGINAL">
+      <rest method="POST" path="/auth/refresh">
+        <header>
+          <name>Accept</name>
+          <value>application/json</value>
+        </header>
+        <header>
+          <name>Content-Type</name>
+          <value>application/json</value>
+        </header>
+        <auth mode="none"/>
+        <body>
+          <kv>
+            <key>refreshToken</key>
+            <parameter>REFRESH_A_ORIGINAL</parameter>
+          </kv>
+        </body>
+        <assertionCode>def assert_response(responseBody, globalParam, statusCode, headers):
+    return statusCode == 401 and responseBody["code"] == 40101 and bool(responseBody.get("requestId"))
+</assertionCode>
+      </rest>
+    </taskStep>
+    <taskStep order="70" ifParameter="REFRESH_A">
+      <rest method="POST" path="/auth/refresh">
+        <header>
+          <name>Accept</name>
+          <value>application/json</value>
+        </header>
+        <header>
+          <name>Content-Type</name>
+          <value>application/json</value>
+        </header>
+        <auth mode="none"/>
+        <body>
+          <kv>
+            <key>refreshToken</key>
+            <parameter>REFRESH_A</parameter>
+          </kv>
+        </body>
+        <assertionCode>def assert_response(responseBody, globalParam, statusCode, headers):
+    return statusCode == 401 and responseBody["code"] == 40101 and bool(responseBody.get("requestId"))
+</assertionCode>
+      </rest>
+    </taskStep>
+  </finally>
+</task>
