@@ -1,0 +1,35 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<task name="TC-139 审计日志脱敏">
+  <!--base_url=http://127.0.0.1:10201/api/v1；共享身份串行执行；清理失败须由调度器停止后续任务。-->
+  <taskStep order="10">
+    <rest method="GET" path="/communities">
+      <header>
+        <name>Accept</name>
+        <value>application/json</value>
+      </header>
+      <auth mode="none"/>
+      <assertionCode><![CDATA[def assert_response(responseBody, globalParam, statusCode, headers):
+    if statusCode != 200 or not isinstance(responseBody, dict) or responseBody.get("code") != 0:
+        raise Blocked("可访问接口核查请求失败，无法完成源用例步骤2")
+    assert responseBody.get("requestId")
+    assert isinstance(responseBody.get("data"), list)
+    return True
+]]></assertionCode>
+    </rest>
+  </taskStep>
+  <taskStep order="20">
+    <rest method="GET" path="/communities">
+      <header>
+        <name>Accept</name>
+        <value>application/json</value>
+      </header>
+      <auth mode="none"/>
+      <assertionCode><![CDATA[def assert_response(responseBody, globalParam, statusCode, headers):
+    if statusCode != 200 or not isinstance(responseBody, dict) or responseBody.get("code") != 0:
+        raise Blocked("可访问接口重复核查失败")
+    assert responseBody.get("requestId")
+    raise Blocked("公开契约没有访问日志或审计记录的 HTTP 查询接口，只能检查响应体；requestId 正确不能证明后台日志满足审计完整性与敏感信息脱敏要求，源用例判定阻塞")
+]]></assertionCode>
+    </rest>
+  </taskStep>
+</task>

@@ -6,7 +6,7 @@
         <column name="namespace" type="varchar(64)" nullable="false" comment="状态命名空间" />
         <column name="state_key" type="varchar(255)" nullable="false" comment="状态键" />
         <column name="state_value" type="jsonb" nullable="false" comment="状态值" />
-        <column name="updated_at" type="timestamptz" nullable="false" default="now()"
+        <column name="updated_at" type="timestamptz(0)" nullable="false" default="now()"
           comment="最后更新时间" />
       </columns>
       <constraints>

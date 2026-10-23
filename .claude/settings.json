@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python docs/test-case-xml/validate.py 113-rating-comment-boundary.xml)",
+      "Bash(python docs/test-case-xml/validate.py docs/test-case-xml/113-rating-comment-boundary.xml)",
+      "Bash(python docs/test-case-xml/validate.py 117-rating-pagination.xml)",
+      "Bash(python docs/test-case-xml/validate.py docs/test-case-xml/122-risk-insufficient-samples.xml)",
+      "Bash(python docs/test-case-xml/validate.py 116-rating-summary-counts.xml)",
+      "Bash(python docs/test-case-xml/validate.py docs/test-case-xml/118-rating-public-privacy.xml)",
+      "Bash(python docs/test-case-xml/validate.py docs/test-case-xml/123-risk-threshold.xml)",
+      "Bash(python docs/test-case-xml/validate.py docs/test-case-xml/115-rating-empty-summary.xml)",
+      "Bash(python /opt/apps/PartApp/PartService/docs/test-case-xml/validate.py /opt/apps/PartApp/PartService/docs/test-case-xml/126-risk-recovery.xml)",
+      "Bash(python validate.py 113-rating-comment-boundary.xml)",
+      "Bash(python docs/test-case-xml/validate.py 112-rating-comment-too-long.xml)",
+      "Bash(python docs/test-case-xml/validate.py docs/test-case-xml/117-rating-pagination.xml)",
+      "Bash(python docs/test-case-xml/validate.py docs/test-case-xml/124-risk-recompute.xml)",
+      "Bash(python /opt/apps/PartApp/PartService/docs/test-case-xml/validate.py /opt/apps/PartApp/PartService/docs/test-case-xml/116-rating-summary-counts.xml)",
+      "Bash(python docs/test-case-xml/validate.py 127-risk-algorithm-version.xml)",
+      "Bash(python -c ' *)",
+      "Bash(python docs/test-case-xml/validate.py 128-risk-tag-removal.xml)",
+      "Bash(python /opt/apps/PartApp/PartService/docs/test-case-xml/validate_importer.py 116-rating-summary-counts.xml)",
+      "Bash(python docs/test-case-xml/validate.py docs/test-case-xml/128-risk-tag-removal.xml)",
+      "Bash(python /opt/apps/PartApp/PartService/docs/test-case-xml/validate_importer.py --importer-root /opt/apps/Deployment/AutoTestService 116-rating-summary-counts.xml)",
+      "Bash(python docs/test-case-xml/validate.py docs/test-case-xml/120-rating-anonymous.xml)",
+      "Bash(python docs/test-case-xml/validate.py 121-rating-appeal.xml)",
+      "Bash(python docs/test-case-xml/validate.py docs/test-case-xml/121-rating-appeal.xml)",
+      "Bash(python docs/test-case-xml/validate.py 131-auth-forged.xml)",
+      "Bash(python *)",
+      "Bash(python docs/test-case-xml/validate.py docs/test-case-xml/112-rating-comment-too-long.xml)",
+      "Bash(python /opt/apps/PartApp/PartService/docs/test-case-xml/validate_importer.py --importer-root /opt/apps/Deployment/AutoTestService /opt/apps/PartApp/PartService/docs/test-case-xml/116-rating-summary-counts.xml)",
+      "Bash(python /opt/apps/PartApp/PartService/docs/test-case-xml/validate_importer.py --importer-root /opt/apps/Deployment/AutoTestService /opt/apps/PartApp/PartService/docs/test-case-xml/101-rating-good.xml)",
+      "Bash(echo \"=== exit: $?\")",
+      "Bash(python docs/test-case-xml/validate.py docs/test-case-xml/133-pagination-limit-0.xml)"
+    ]
+  }
+}

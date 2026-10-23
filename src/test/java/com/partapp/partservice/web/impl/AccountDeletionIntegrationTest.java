@@ -6,6 +6,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -40,6 +42,7 @@ class AccountDeletionIntegrationTest {
   @Autowired ObjectMapper json;
 
   private final Map<UUID, TokenPair> created = new LinkedHashMap<>();
+  private final List<UUID> createdRooms = new ArrayList<>();
   private UUID community;
 
   @AfterEach
@@ -48,8 +51,12 @@ class AccountDeletionIntegrationTest {
       if (users.findById(entry.getKey()).isPresent())
         deletion.deleteCurrentUser("Bearer " + entry.getValue().accessToken());
     }
-    if (community != null)
+    if (community != null) {
+      // Production retains history; remove only this test's rooms during teardown.
+      for (UUID id : createdRooms)
+        db.update("DELETE FROM chat_room WHERE id = ?", id);
       db.update("DELETE FROM community WHERE id = ?", community);
+    }
   }
 
   private TokenPair registerUser(String label) {
@@ -78,6 +85,7 @@ class AccountDeletionIntegrationTest {
   private UUID room(UUID topic, UUID... members) {
     UUID id = UUID.randomUUID();
     db.update("INSERT INTO chat_room (id, topic_id) VALUES (?, ?)", id, topic);
+    createdRooms.add(id);
     for (UUID member : members)
       db.update("INSERT INTO chat_member (room_id, user_id) VALUES (?, ?)", id, member);
     return id;
@@ -122,7 +130,7 @@ class AccountDeletionIntegrationTest {
     UUID ownTopic = topic(aid), sharedTopic = topic(bid), unrelatedTopic = topic(cid);
     UUID ownRoom = room(ownTopic, aid, bid), sharedRoom = room(sharedTopic, aid, bid);
     UUID unrelatedRoom = room(unrelatedTopic, cid);
-    message(ownRoom, bid);
+    UUID ownRoomMessage = message(ownRoom, bid);
     UUID ownMessage = message(sharedRoom, aid), peerMessage = message(sharedRoom, bid);
     message(unrelatedRoom, cid);
     db.update("UPDATE chat_member SET last_read_message_id = ? WHERE room_id = ?", ownMessage, sharedRoom);
@@ -131,8 +139,7 @@ class AccountDeletionIntegrationTest {
     db.update("INSERT INTO chat_message_read (room_id, user_id) VALUES (?, ?)", sharedRoom, aid);
     for (UUID t : new UUID[] {ownTopic, sharedTopic}) {
       db.update("INSERT INTO topic_recipient (topic_id, user_id) VALUES (?, ?)", t, aid);
-      db.update("INSERT INTO topic_participant (topic_id, user_id, source) VALUES (?, ?, 'invitation')", t, aid);
-      db.update("INSERT INTO topic_invitation (topic_id, inviter_id, invitee_id) VALUES (?, ?, ?)", t, bid, aid);
+      db.update("INSERT INTO topic_participant (topic_id, user_id, source) VALUES (?, ?, 'acceptance')", t, aid);
     }
     rating(sharedTopic, aid, bid);
     rating(sharedTopic, bid, aid);
@@ -157,9 +164,9 @@ class AccountDeletionIntegrationTest {
       assertEquals(0, count(table, "user_id", aid), table);
     assertEquals(0, count("user", "id", aid));
     assertEquals(0, count("topic", "id", ownTopic));
-    assertEquals(0, count("chat_room", "id", ownRoom));
-    assertEquals(0, count("chat_message", "sender_id", aid));
-    assertEquals(0, count("topic_invitation", "invitee_id", aid));
+    assertEquals(1, count("chat_room", "id", ownRoom));
+    assertEquals(1, count("chat_message", "id", ownRoomMessage));
+    assertEquals(1, count("chat_message", "sender_id", aid));
     assertEquals(0, count("audit_log", "actor_user_id", aid));
     assertEquals(0, count("verification_code", "identity_value", aid + "@example.com"));
     assertNull(users.getIdentity("phone:13900000002"));
@@ -174,11 +181,17 @@ class AccountDeletionIntegrationTest {
     assertEquals(1, count("chat_message", "id", peerMessage));
     assertEquals(1, count("rating", "id", retainedRating));
     assertEquals(1, count("rating_category_item", "rating_id", retainedRating));
-    assertNull(db.queryForObject("SELECT last_read_message_id FROM chat_member WHERE room_id = ? AND user_id = ?",
+    assertEquals(ownMessage, db.queryForObject("SELECT last_read_message_id FROM chat_member WHERE room_id = ? AND user_id = ?",
         UUID.class, sharedRoom, bid));
-    assertNull(db.queryForObject("SELECT last_read_message_id FROM chat_message_read WHERE room_id = ? AND user_id = ?",
+    assertEquals(ownMessage, db.queryForObject("SELECT last_read_message_id FROM chat_message_read WHERE room_id = ? AND user_id = ?",
         UUID.class, sharedRoom, bid));
     assertRevoked(a);
+    for (UUID retainedRoom : new UUID[] {ownRoom, sharedRoom})
+      http.perform(get("/api/v1/rooms/" + retainedRoom + "/messages")
+          .header("Authorization", "Bearer " + b.accessToken()))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.data.items[?(@.id == '" +
+              (retainedRoom.equals(ownRoom) ? ownRoomMessage : ownMessage) + "')]").isNotEmpty());
     assertRevoked(secondSession);
     http.perform(get("/api/v1/me").header("Authorization", "Bearer " + b.accessToken()))
         .andExpect(status().isOk()).andExpect(jsonPath("$.data.id").value(bid.toString()));
@@ -233,6 +246,96 @@ class AccountDeletionIntegrationTest {
     } finally {
       db.execute("DROP TRIGGER reject_account_test_delete ON \"user\"");
       db.execute("DROP FUNCTION reject_account_test_delete()");
+    }
+  }
+
+  @Autowired TopicsControllerImpl topicsController;
+  @Autowired com.partapp.partservice.persistence.repository.TopicParticipationService participation;
+
+  @Test
+  void publishesInboxAndCreatesOneRoomOnConcurrentAcceptance() throws Exception {
+    var a=registerUser("publisher"); var b=registerUser("B"); var c=registerUser("C");
+    var t=topicsController.createTopic(a.accessToken(), new com.partapp.partservice.api.Requests.Topic(
+        "walk", "details", null, null, java.util.Set.of(), null));
+    assertEquals(0,count("chat_room","topic_id",t.id()));
+    assertEquals(2,count("topic_recipient","topic_id",t.id()));
+    http.perform(get("/api/v1/topics/receipts").header("Authorization","Bearer "+b.accessToken()))
+        .andExpect(status().isOk()).andExpect(jsonPath("$.data.items[0].topicId").value(t.id().toString()));
+    http.perform(post("/api/v1/topics/"+t.id()+"/read").header("Authorization","Bearer "+b.accessToken()))
+        .andExpect(status().isOk()).andExpect(jsonPath("$.data.readAt").isNotEmpty());
+    assertEquals(1,participation.inbox(b.accessToken(),"pending",null,1).items().size());
+    assertNotNull(participation.read(b.accessToken(),t.id()).getReadAt().orElse(null));
+    try (var pool=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+      var start=new java.util.concurrent.CountDownLatch(1);
+      var first=pool.submit(() -> { start.await(); return participation.accept(b.accessToken(),t.id()); });
+      var second=pool.submit(() -> { start.await(); return participation.accept(c.accessToken(),t.id()); });
+      start.countDown();
+      UUID room=first.get(15,java.util.concurrent.TimeUnit.SECONDS).getRoomId().orElse(null);
+      createdRooms.add(room);
+      assertEquals(room,second.get(15,java.util.concurrent.TimeUnit.SECONDS).getRoomId().orElse(null));
+      assertEquals(room,participation.accept(b.accessToken(),t.id()).getRoomId().orElse(null));
+      http.perform(post("/api/v1/topics/"+t.id()+"/accept").header("Authorization","Bearer "+b.accessToken()))
+          .andExpect(status().isOk()).andExpect(jsonPath("$.data.roomId").value(room.toString()));
+      assertEquals(3,count("chat_member","room_id",room));
+      assertEquals(3,count("topic_participant","topic_id",t.id()));
+      assertEquals(1,count("chat_room","topic_id",t.id()));
+      assertEquals("owner",db.queryForObject("SELECT role FROM chat_member WHERE room_id=? AND user_id=?",String.class,room,a.user().id()));
+      topicsController.closeTopic(a.accessToken(),t.id());
+      assertEquals(room,participation.accept(b.accessToken(),t.id()).getRoomId().orElse(null));
+    }
+    http.perform(post("/api/v1/topics/"+t.id()+"/invite").header("Authorization","Bearer "+a.accessToken())
+        .contentType("application/json").content("{}" )).andExpect(status().isNotFound());
+  }
+
+  @Test
+  void rejectsNewAcceptanceAfterCloseOrExpiryAndRechecksCommunity() {
+    var a=registerUser("publisher"); var b=registerUser("B");
+    var t=topicsController.createTopic(a.accessToken(),new com.partapp.partservice.api.Requests.Topic(
+        "walk","details",null,null,java.util.Set.of(),null));
+    assertThrows(com.partapp.partservice.web.ApiException.class,() -> participation.accept(a.accessToken(),t.id()));
+    db.update("UPDATE topic SET expires_at=now()-interval '1 minute' WHERE id=?",t.id());
+    assertThrows(com.partapp.partservice.web.ApiException.class,() -> participation.accept(b.accessToken(),t.id()));
+    assertEquals(0,count("chat_room","topic_id",t.id()));
+    assertEquals(0,count("topic_participant","topic_id",t.id()));
+    db.update("UPDATE topic SET expires_at=NULL, status='closed' WHERE id=?",t.id());
+    assertThrows(com.partapp.partservice.web.ApiException.class,() -> participation.accept(b.accessToken(),t.id()));
+    assertEquals(0,count("chat_room","topic_id",t.id()));
+  }
+
+  @Test
+  void rollsBackRoomAndParticipationWhenMembershipInsertFails() {
+    var a=registerUser("publisher"); var b=registerUser("B");
+    var t=topicsController.createTopic(a.accessToken(),new com.partapp.partservice.api.Requests.Topic(
+        "walk","details",null,null,java.util.Set.of(),null));
+    db.execute("ALTER TABLE chat_member ADD CONSTRAINT test_reject_member CHECK (user_id <> '"+b.user().id()+"'::uuid) NOT VALID");
+    try {
+      assertThrows(org.springframework.dao.DataIntegrityViolationException.class,() -> participation.accept(b.accessToken(),t.id()));
+      assertEquals(0,count("chat_room","topic_id",t.id()));
+      assertEquals(0,count("topic_participant","topic_id",t.id()));
+      assertEquals("pending",participation.inbox(b.accessToken(),null,null,20).items().getFirst().getStatus().getValue());
+    } finally { db.execute("ALTER TABLE chat_member DROP CONSTRAINT test_reject_member"); }
+  }
+
+  @Test
+  void distributionAndAcceptanceEnforceCommunityAndCurrentProfile() {
+    var a=registerUser("publisher"); var b=registerUser("B"); var unmatched=registerUser("unmatched");
+    db.update("UPDATE \"user\" SET gender='male' WHERE id=?",b.user().id());
+    var t=topicsController.createTopic(a.accessToken(),new com.partapp.partservice.api.Requests.Topic(
+        "walk","details",null,null,java.util.Set.of("male"),null));
+    assertEquals(1,count("topic_recipient","topic_id",t.id()));
+    assertThrows(com.partapp.partservice.web.ApiException.class,() -> participation.accept(unmatched.accessToken(),t.id()));
+    db.update("UPDATE \"user\" SET gender='female' WHERE id=?",b.user().id());
+    assertThrows(com.partapp.partservice.web.ApiException.class,() -> participation.accept(b.accessToken(),t.id()));
+    UUID other=UUID.randomUUID();
+    db.update("INSERT INTO community (id,name) VALUES (?, 'other')",other);
+    try {
+      db.update("UPDATE \"user\" SET gender='male',community_id=? WHERE id=?",other,b.user().id());
+      assertTrue(participation.inbox(b.accessToken(),null,null,20).items().isEmpty());
+      assertThrows(com.partapp.partservice.web.ApiException.class,() -> participation.accept(b.accessToken(),t.id()));
+      assertEquals(0,count("chat_room","topic_id",t.id()));
+    } finally {
+      db.update("UPDATE \"user\" SET community_id=? WHERE id=?",community,b.user().id());
+      db.update("DELETE FROM community WHERE id=?",other);
     }
   }
 }

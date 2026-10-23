@@ -1,0 +1,26 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<task name="TC-123 系统评级阈值">
+  <!--base_url=http://127.0.0.1:10201/api/v1；共享身份串行；清理失败须由调度器停止后续任务。本场景不注册用户、无数据写入，省略 finally 清理。-->
+  <taskStep order="10">
+    <rest method="GET" path="/rating-categories">
+      <header>
+        <name>Accept</name>
+        <value>application/json</value>
+      </header>
+      <auth mode="none"/>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if statusCode != 200 or not isinstance(responseBody, dict) or responseBody.get("code") != 0:
+        raise Blocked("TC-123 前提查询失败：GET /rating-categories 应返回 HTTP 200 与业务码 0")
+    if not isinstance(responseBody.get("data"), list):
+        raise Blocked("TC-123 前提查询失败：GET /rating-categories 应返回分类编码数组")
+    if not all(isinstance(item, str) for item in responseBody["data"]):
+        raise Blocked("TC-123 前提查询失败：分类编码数组元素应为字符串")
+    if not responseBody["data"]:
+        raise Blocked("TC-123 前提查询失败：评价分类编码缺失")
+    assert responseBody.get("requestId")
+    raise Blocked("TC-123 公开 HTTP 无读取评级阈值、最小样本量与算法信号的接口，无法构造可复现的命中样本、无法核查系统评级生成；查询成功不能代替目标场景通过，目标场景阻塞")
+]]></assertionCode>
+    </rest>
+  </taskStep>
+</task>

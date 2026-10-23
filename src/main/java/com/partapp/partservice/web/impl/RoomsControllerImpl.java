@@ -2,6 +2,7 @@ package com.partapp.partservice.web.impl;
 
 import java.util.*;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -62,7 +63,7 @@ class RoomsControllerImpl implements RoomsApiDelegate {
     if (r.content() == null || r.content().isBlank())
       throw ApiException.bad("消息内容不能为空");
     Message m = new Message(UUID.randomUUID(), room.id(), uid, r.clientMessageId(), r.messageType(), r.content(),
-        r.contentMeta() == null ? Map.of() : r.contentMeta(), Instant.now(), false);
+        r.contentMeta() == null ? Map.of() : r.contentMeta(), Instant.now().truncatedTo(ChronoUnit.SECONDS), false);
     messageRepo.putMessages(m.id(), m);
     messageRepo.putMessageKeys(key, m.id());
     return m;

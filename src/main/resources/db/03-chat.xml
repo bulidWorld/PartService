@@ -7,14 +7,13 @@
         <column name="topic_id" type="uuid" nullable="false" comment="主题 ID" />
         <column name="name" type="varchar(100)" nullable="true" comment="名称" />
         <column name="status" type="varchar(16)" nullable="false" default="'active'" comment="状态" />
-        <column name="created_at" type="timestamptz" nullable="false" default="now()" comment="创建时间" />
-        <column name="closed_at" type="timestamptz" nullable="true" comment="关闭时间" />
+        <column name="created_at" type="timestamptz(0)" nullable="false" default="now()" comment="创建时间" />
+        <column name="closed_at" type="timestamptz(0)" nullable="true" comment="关闭时间" />
       </columns>
       <constraints>
         <primary-key name="pk_chat_room_id" columns="id" />
         <unique name="uq_chat_room_topic_id" columns="topic_id" />
-        <foreign-key name="fk_chat_room_topic_id" columns="topic_id" references-table="topic"
-          references-columns="id" on-delete="CASCADE" />
+        <!-- Keep the original topic ID after account deletion removes its topic. -->
         <check name="ck_chat_room_status" expression="status IN ('active', 'closed')" />
       </constraints>
     </table>
@@ -23,8 +22,8 @@
         <column name="room_id" type="uuid" nullable="false" comment="聊天室 ID" />
         <column name="user_id" type="uuid" nullable="false" comment="用户 ID" />
         <column name="role" type="varchar(16)" nullable="false" default="'member'" comment="成员角色" />
-        <column name="joined_at" type="timestamptz" nullable="false" default="now()" comment="加入时间" />
-        <column name="left_at" type="timestamptz" nullable="true" comment="离开时间" />
+        <column name="joined_at" type="timestamptz(0)" nullable="false" default="now()" comment="加入时间" />
+        <column name="left_at" type="timestamptz(0)" nullable="true" comment="离开时间" />
         <column name="last_read_message_id" type="uuid" nullable="true" comment="最后已读消息 ID" />
       </columns>
       <constraints>
@@ -52,15 +51,14 @@
         <column name="content" type="text" nullable="true" comment="消息内容" />
         <column name="content_meta" type="jsonb" nullable="false" default="'{}'::jsonb"
           comment="消息元数据" />
-        <column name="recalled_at" type="timestamptz" nullable="true" comment="撤回时间" />
-        <column name="created_at" type="timestamptz" nullable="false" default="now()" comment="创建时间" />
+        <column name="recalled_at" type="timestamptz(0)" nullable="true" comment="撤回时间" />
+        <column name="created_at" type="timestamptz(0)" nullable="false" default="now()" comment="创建时间" />
       </columns>
       <constraints>
         <primary-key name="pk_chat_message_id" columns="id" />
         <foreign-key name="fk_chat_message_room_id" columns="room_id" references-table="chat_room"
           references-columns="id" on-delete="CASCADE" />
-        <foreign-key name="fk_chat_message_sender_id" columns="sender_id" references-table="user"
-          references-columns="id" />
+        <!-- Historical sender IDs survive account deletion. -->
         <check name="ck_chat_message_type" expression="message_type IN ('text', 'image', 'system')" />
         <check name="ck_chat_message_content_meta_object"
           expression="jsonb_typeof(content_meta) = 'object'" />
@@ -80,7 +78,7 @@
         <column name="room_id" type="uuid" nullable="false" comment="聊天室 ID" />
         <column name="user_id" type="uuid" nullable="false" comment="用户 ID" />
         <column name="last_read_message_id" type="uuid" nullable="true" comment="最后已读消息 ID" />
-        <column name="read_at" type="timestamptz" nullable="false" default="now()" comment="阅读时间" />
+        <column name="read_at" type="timestamptz(0)" nullable="false" default="now()" comment="阅读时间" />
       </columns>
       <constraints>
         <foreign-key name="fk_chat_message_read_room_id" columns="room_id"
@@ -91,4 +89,12 @@
       </constraints>
     </table>
   </tables>
+  <statements>
+    <statement id="chat-history-retain-room-topic-reference">
+      <sql>ALTER TABLE chat_room DROP CONSTRAINT IF EXISTS fk_chat_room_topic_id</sql>
+    </statement>
+    <statement id="chat-history-retain-message-sender-reference">
+      <sql>ALTER TABLE chat_message DROP CONSTRAINT IF EXISTS fk_chat_message_sender_id</sql>
+    </statement>
+  </statements>
 </database>

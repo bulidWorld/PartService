@@ -50,12 +50,6 @@ components:
         description: 主题 ID
       description: 主题 ID
   responses:
-    InvitationResponse:
-      description: Invitation
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ApiResponseInvitation'
     TopicResponse:
       description: Topic
       content:
@@ -110,49 +104,6 @@ components:
           type: boolean
           description: 是否还有更多数据
       description: Page字段
-    ApiResponseInvitation:
-      allOf:
-      - $ref: '#/components/schemas/ApiResponse'
-      - type: object
-        properties:
-          data:
-            $ref: '#/components/schemas/Invitation'
-            description: 业务数据
-      description: ApiResponseInvitation字段
-    Invitation:
-      type: object
-      required:
-      - id
-      - topicId
-      - inviteeId
-      - inviterId
-      - status
-      properties:
-        id:
-          type: string
-          format: uuid
-          description: 唯一标识
-        topicId:
-          type: string
-          format: uuid
-          description: 主题 ID
-        inviteeId:
-          type: string
-          format: uuid
-          description: 受邀用户 ID
-        inviterId:
-          type: string
-          format: uuid
-          description: 邀请人 ID
-        status:
-          type: string
-          description: 当前状态
-        roomId:
-          type: string
-          format: uuid
-          nullable: true
-          description: 聊天室 ID
-      description: Invitation字段
     ApiResponseTopic:
       allOf:
       - $ref: '#/components/schemas/ApiResponse'
@@ -171,16 +122,6 @@ components:
             $ref: '#/components/schemas/PageOfTopics'
             description: 业务数据
       description: ApiResponseTopics字段
-    InviteRequest:
-      type: object
-      required:
-      - userId
-      properties:
-        userId:
-          type: string
-          format: uuid
-          description: user ID字段
-      description: InviteRequest字段
     PageOfTopics:
       allOf:
       - $ref: '#/components/schemas/Page'
@@ -276,6 +217,55 @@ components:
           format: date-time
           description: 主题过期时间
       description: TopicRequest字段
+    TopicReceipt:
+      type: object
+      required:
+      - topicId
+      - status
+      - createdAt
+      properties:
+        topicId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - pending
+          - accepted
+          - expired
+        roomId:
+          type: string
+          format: uuid
+          nullable: true
+        readAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+    ApiResponseTopicReceipt:
+      allOf:
+      - $ref: '#/components/schemas/ApiResponse'
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/TopicReceipt'
+    ApiResponseTopicReceipts:
+      allOf:
+      - $ref: '#/components/schemas/ApiResponse'
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/PageOfTopicReceipts'
+    PageOfTopicReceipts:
+      allOf:
+      - $ref: '#/components/schemas/Page'
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TopicReceipt'
 paths:
   /topics:
     get:
@@ -347,22 +337,53 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/TopicResponse'
-  /topics/{topicId}/invite:
+  /topics/{topicId}/accept:
     post:
       tags:
       - Topics
-      operationId: inviteUser
+      operationId: acceptTopic
       security:
       - bearerAuth: []
       parameters:
       - $ref: '#/components/parameters/topicId'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/InviteRequest'
-        description: 请求参数
       responses:
         '200':
-          $ref: '#/components/responses/InvitationResponse'
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseTopicReceipt'
+  /topics/receipts:
+    get:
+      tags:
+      - Topics
+      operationId: listTopicReceipts
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/status'
+      - $ref: '#/components/parameters/cursor'
+      - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseTopicReceipts'
+  /topics/{topicId}/read:
+    post:
+      tags:
+      - Topics
+      operationId: readTopic
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/topicId'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseTopicReceipt'

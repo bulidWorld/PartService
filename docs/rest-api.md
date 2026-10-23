@@ -31,7 +31,7 @@
 | POST | `/auth/refresh` | body `{refresh_token}`，返回新 access token |
 | POST | `/auth/logout` | 撤销当前 refresh token |
 | GET | `/me` | 当前用户资料 |
-| DELETE | `/me` | 注销当前账号，无请求体；永久删除账号、身份、全部令牌及关联业务数据，释放邮箱/手机号供重新注册；HTTP 200、`code=0`、`data={}` |
+| DELETE | `/me` | 注销当前账号，无请求体；删除账号、身份、全部令牌及关联业务数据，但保留聊天室、历史消息和其他成员的已读位置，原发送者 ID、主题 ID 不变；释放邮箱/手机号供重新注册；HTTP 200、`code=0`、`data={}` |
 | PATCH | `/me` | 修改 `nickname,gender,birth_date,avatar_url` |
 | PATCH | `/me/community` | body `{community_id}`；7 天内切换返回 `40901` |
 | GET | `/communities` | 获取可用社区 |
@@ -44,19 +44,18 @@
 {"code":0,"message":"ok","data":{"access_token":"...","expires_in":7200,"refresh_token":"...","user":{"id":"...","nickname":"小明","community":{"id":"...","name":"城市社区"}}},"request_id":"..."}
 ```
 
-## 3. 主题与邀请
+## 3. 主题推送与接受
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | POST | `/topics` | 发布；body `{title,detail,constraints,expires_at}` |
 | GET | `/topics` | 同社区主题流；query `status,cursor,limit` |
-| GET | `/topics/{topic_id}` | 主题详情及我的邀请状态 |
+| GET | `/topics/{topic_id}` | 主题详情 |
 | PATCH | `/topics/{topic_id}` | 发布者修改标题、详情、约束 |
 | POST | `/topics/{topic_id}/close` | 发布者关闭主题 |
-| POST | `/topics/{topic_id}/invite` | body `{user_id}`，创建邀请 |
-| GET | `/invitations` | query `status,cursor,limit` |
-| POST | `/invitations/{invitation_id}/accept` | 接受并加入聊天室，幂等 |
-| POST | `/invitations/{invitation_id}/reject` | 拒绝邀请，幂等 |
+| GET | `/topics/receipts` | 我的主题收件，query `status,cursor,limit` |
+| POST | `/topics/{topic_id}/accept` | 接受主题，首次接受创建聊天室，幂等 |
+| POST | `/topics/{topic_id}/read` | 标记主题收件已读，幂等 |
 
 主题响应示例：`{id,title,detail,constraints:{min_age,max_age,genders},publisher,community,status,expires_at,participant_count,room_id}`。跨社区主题统一返回 `40401`，避免泄露信息。
 
@@ -91,6 +90,6 @@
 ## 6. 客户端错误处理与安全
 
 - 客户端应以 `code` 而非 HTTP 文案判断业务结果；HTTP 状态码仍按语义返回（成功 2xx、参数 4xx、服务端 5xx）。
-- 所有 POST/PATCH 建议携带 `Idempotency-Key`；服务端至少对注册、接受邀请、发消息、提交评价做幂等。
+- 所有 POST/PATCH 建议携带 `Idempotency-Key`；服务端至少对注册、接受主题、发消息、提交评价做幂等。
 - 验证码、token、评论中的敏感信息不得写入日志；服务端日志通过 `request_id` 串联，HTTP 请求以 INFO 级别记录。
 - 客户端收到 `40101` 应尝试 refresh 一次，仍失败则清理本地会话并回到登录页；收到 `42901` 按 `Retry-After` 等待。

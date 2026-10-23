@@ -40,6 +40,7 @@ public class RoomRepository {
             var m = new ChatMemberEntity();
             m.roomId = id;
             m.userId = u;
+            m.role = u.equals(v.ownerId()) ? "owner" : "member";
             members.insert(m);
         }
     }
@@ -50,7 +51,9 @@ public class RoomRepository {
 
     private Room from(ChatRoomEntity e) {
         Set<UUID> ms = new HashSet<>();
-        members.selectList(new QueryWrapper<ChatMemberEntity>().eq("room_id", e.id)).forEach(x -> ms.add(x.userId));
-        return new Room(e.id, e.topicId, ms.stream().findFirst().orElse(null), ms, e.createdAt);
+        var rows = members.selectList(new QueryWrapper<ChatMemberEntity>().eq("room_id", e.id));
+        rows.forEach(x -> ms.add(x.userId));
+        UUID owner = rows.stream().filter(x -> "owner".equals(x.role)).map(x -> x.userId).findFirst().orElse(null);
+        return new Room(e.id, e.topicId, owner, ms, e.createdAt);
     }
 }

@@ -8,12 +8,9 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 import com.partapp.partservice.api.Requests;
-import com.partapp.partservice.persistence.repository.InvitationRepository;
-import com.partapp.partservice.persistence.repository.RoomRepository;
+import com.partapp.partservice.persistence.repository.TopicParticipationService;
 import com.partapp.partservice.persistence.repository.TopicRepository;
 import com.partapp.partservice.persistence.repository.UserRepository;
-import com.partapp.partservice.persistence.repository.InvitationRepository.Invitation;
-import com.partapp.partservice.persistence.repository.RoomRepository.Room;
 import com.partapp.partservice.persistence.repository.TopicRepository.Topic;
 import com.partapp.partservice.persistence.repository.UserRepository.User;
 import com.partapp.partservice.api.PageResponse;
@@ -22,18 +19,17 @@ import com.partapp.partservice.web.generated.api.TopicsApiDelegate;
 import com.partapp.partservice.web.generated.model.*;
 
 @Service
+@org.springframework.transaction.annotation.Transactional
 class TopicsControllerImpl implements TopicsApiDelegate {
   private final UserRepository userRepo;
   private final TopicRepository topicRepo;
-  private final RoomRepository roomRepo;
-  private final InvitationRepository invitationRepo;
+  private final TopicParticipationService participation;
 
-  TopicsControllerImpl(UserRepository userRepo, TopicRepository topicRepo, RoomRepository roomRepo,
-      InvitationRepository invitationRepo) {
+  TopicsControllerImpl(UserRepository userRepo, TopicRepository topicRepo,
+      TopicParticipationService participation) {
     this.userRepo = userRepo;
     this.topicRepo = topicRepo;
-    this.roomRepo = roomRepo;
-    this.invitationRepo = invitationRepo;
+    this.participation = participation;
   }
 
   protected String authorization() {
@@ -53,13 +49,13 @@ class TopicsControllerImpl implements TopicsApiDelegate {
     Topic t = new Topic(UUID.randomUUID(), u.id(), u.communityId(), r.title(), r.detail(), r.minAge(), r.maxAge(),
         r.genders() == null ? Set.of() : Set.copyOf(r.genders()), r.expiresAt(), "open", Instant.now());
     topicRepo.putTopic(t.id(), t);
-    Room room = new Room(UUID.randomUUID(), t.id(), u.id(), new HashSet<>(Set.of(u.id())), Instant.now());
-    roomRepo.putRoom(room.id(), room);
+    participation.distribute(t);
     return t;
   }
 
   public Topic closeTopic(String bearer, UUID id) {
     User u = userRepo.current(bearer);
+    participation.lock(id);
     Topic t = topic(bearer, id);
     if (!t.publisherId().equals(u.id()))
       throw ApiException.forbidden("只有发布者可以关闭主题");
@@ -73,6 +69,7 @@ class TopicsControllerImpl implements TopicsApiDelegate {
 
   public Topic updateTopic(String bearer, UUID id, Requests.Topic r) {
     User u = userRepo.current(bearer);
+    participation.lock(id);
     Topic old = topic(bearer, id);
     if (!old.publisherId().equals(u.id()))
       throw ApiException.forbidden("只有发布者可以修改主题");
@@ -97,24 +94,6 @@ class TopicsControllerImpl implements TopicsApiDelegate {
     if (t == null || !t.communityId().equals(u.communityId()))
       throw ApiException.notFound("主题不存在");
     return t;
-  }
-
-  public Invitation invite(String bearer, UUID topicId, UUID invitee) {
-    User u = userRepo.current(bearer);
-    Topic t = topic(bearer, topicId);
-    if (!t.publisherId().equals(u.id()))
-      throw ApiException.forbidden("只有发布者可以邀请");
-    User target = userRepo.getUser(invitee);
-    if (invitee.equals(u.id()) || target == null || !target.communityId().equals(u.communityId())
-        || !topicRepo.matches(t, target))
-      throw ApiException.bad("邀请对象不满足主题条件");
-    Invitation old = invitationRepo.allInvitations().stream()
-        .filter(i -> i.topicId().equals(topicId) && i.inviteeId().equals(invitee)).findFirst().orElse(null);
-    if (old != null)
-      return old;
-    Invitation i = new Invitation(UUID.randomUUID(), topicId, invitee, u.id(), "pending", null);
-    invitationRepo.putInvitation(i.id(), i);
-    return i;
   }
 
   private Requests.Topic request(TopicRequest x) {
@@ -143,13 +122,25 @@ class TopicsControllerImpl implements TopicsApiDelegate {
     return ResponseEntity.ok(new ApiResponseTopic(0, "ok", ApiModelMapper.topic(closeTopic(authorization(), id)), requestId()));
   }
 
-  @Override
-  public ResponseEntity<ApiResponseInvitation> inviteUser(UUID id, InviteRequest x) {
-    return ResponseEntity.ok(new ApiResponseInvitation(0, "ok", ApiModelMapper.invitation(invite(authorization(), id, x.getUserId())), requestId()));
-  }
 
   @Override
   public ResponseEntity<ApiResponseTopic> updateTopic(UUID id, TopicRequest x) {
     return ResponseEntity.ok(new ApiResponseTopic(0, "ok", ApiModelMapper.topic(updateTopic(authorization(), id, request(x))), requestId()));
+  }
+  @Override
+  public ResponseEntity<ApiResponseTopicReceipt> acceptTopic(UUID id) {
+    return ResponseEntity.ok(new ApiResponseTopicReceipt(0, "ok", participation.accept(authorization(), id), requestId()));
+  }
+
+  @Override
+  public ResponseEntity<ApiResponseTopicReceipt> readTopic(UUID id) {
+    return ResponseEntity.ok(new ApiResponseTopicReceipt(0, "ok", participation.read(authorization(), id), requestId()));
+  }
+
+  @Override
+  public ResponseEntity<ApiResponseTopicReceipts> listTopicReceipts(String status, String cursor, Integer limit) {
+    var page = participation.inbox(authorization(), status, cursor, limit);
+    var data = new PageOfTopicReceipts().items(page.items()).nextCursor(page.nextCursor()).hasMore(page.hasMore());
+    return ResponseEntity.ok(new ApiResponseTopicReceipts(0, "ok", data, requestId()));
   }
 }

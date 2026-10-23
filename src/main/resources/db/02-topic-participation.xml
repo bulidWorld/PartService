@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<database name="part-service" source="02-topic-invitation.xml" dialect="postgresql">
+<database name="part-service" source="02-topic-participation.xml" dialect="postgresql">
   <tables>
     <table name="topic" if-not-exists="true" comment="主题">
       <columns>
@@ -11,9 +11,9 @@
         <column name="constraint_json" type="jsonb" nullable="false" default="'{}'::jsonb"
           comment="主题匹配条件" />
         <column name="status" type="varchar(16)" nullable="false" default="'open'" comment="状态" />
-        <column name="expires_at" type="timestamptz" nullable="true" comment="过期时间" />
-        <column name="created_at" type="timestamptz" nullable="false" default="now()" comment="创建时间" />
-        <column name="updated_at" type="timestamptz" nullable="false" default="now()"
+        <column name="expires_at" type="timestamptz(0)" nullable="true" comment="过期时间" />
+        <column name="created_at" type="timestamptz(0)" nullable="false" default="now()" comment="创建时间" />
+        <column name="updated_at" type="timestamptz(0)" nullable="false" default="now()"
           comment="最后更新时间" />
       </columns>
       <constraints>
@@ -47,10 +47,11 @@
         <column name="id" type="uuid" nullable="true" default="gen_random_uuid()" comment="主键 ID" />
         <column name="topic_id" type="uuid" nullable="false" comment="主题 ID" />
         <column name="user_id" type="uuid" nullable="false" comment="用户 ID" />
+        <column name="accepted_at" type="timestamptz(0)" nullable="true" comment="接受时间" />
         <column name="match_reason" type="jsonb" nullable="false" default="'{}'::jsonb"
           comment="匹配原因" />
-        <column name="read_at" type="timestamptz" nullable="true" comment="阅读时间" />
-        <column name="created_at" type="timestamptz" nullable="false" default="now()" comment="创建时间" />
+        <column name="read_at" type="timestamptz(0)" nullable="true" comment="阅读时间" />
+        <column name="created_at" type="timestamptz(0)" nullable="false" default="now()" comment="创建时间" />
       </columns>
       <constraints>
         <primary-key name="pk_topic_recipient_id" columns="id" />
@@ -76,61 +77,20 @@
         </index>
       </indexes>
     </table>
-    <table name="topic_invitation" if-not-exists="true" comment="主题邀请">
-      <columns>
-        <column name="id" type="uuid" nullable="true" default="gen_random_uuid()" comment="主键 ID" />
-        <column name="topic_id" type="uuid" nullable="false" comment="主题 ID" />
-        <column name="invitee_id" type="uuid" nullable="false" comment="受邀用户 ID" />
-        <column name="inviter_id" type="uuid" nullable="false" comment="邀请人 ID" />
-        <column name="status" type="varchar(16)" nullable="false" default="'pending'" comment="状态" />
-        <column name="responded_at" type="timestamptz" nullable="true" comment="响应时间" />
-        <column name="created_at" type="timestamptz" nullable="false" default="now()" comment="创建时间" />
-        <column name="updated_at" type="timestamptz" nullable="false" default="now()"
-          comment="最后更新时间" />
-      </columns>
-      <constraints>
-        <primary-key name="pk_topic_invitation_id" columns="id" />
-        <foreign-key name="fk_topic_invitation_topic_id" columns="topic_id" references-table="topic"
-          references-columns="id" on-delete="CASCADE" />
-        <foreign-key name="fk_topic_invitation_invitee_id" columns="invitee_id"
-          references-table="user" references-columns="id" />
-        <foreign-key name="fk_topic_invitation_inviter_id" columns="inviter_id"
-          references-table="user" references-columns="id" />
-        <check name="ck_topic_invitation_status"
-          expression="status IN ('pending', 'accepted', 'rejected', 'expired', 'cancelled')" />
-        <check name="ck_topic_invitation_distinct_users" expression="invitee_id &lt;&gt; inviter_id" />
-        <unique name="uq_topic_invitation_topic_invitee" columns="topic_id, invitee_id" />
-      </constraints>
-      <indexes>
-        <index name="idx_topic_invitation_invitee_status_created" unique="false" method="btree"
-          if-not-exists="true">
-          <column name="invitee_id" order="ASC" />
-          <column name="status" order="ASC" />
-          <column name="created_at" order="DESC" />
-          <column name="id" order="DESC" />
-        </index>
-        <index name="idx_topic_invitation_topic_status" unique="false" method="btree"
-          if-not-exists="true">
-          <column name="topic_id" order="ASC" />
-          <column name="status" order="ASC" />
-          <column name="created_at" order="DESC" />
-        </index>
-      </indexes>
-    </table>
     <table name="topic_participant" if-not-exists="true" comment="主题参与者">
       <columns>
         <column name="topic_id" type="uuid" nullable="false" comment="主题 ID" />
         <column name="user_id" type="uuid" nullable="false" comment="用户 ID" />
         <column name="source" type="varchar(16)" nullable="false" comment="来源" />
-        <column name="joined_at" type="timestamptz" nullable="false" default="now()" comment="加入时间" />
-        <column name="left_at" type="timestamptz" nullable="true" comment="离开时间" />
+        <column name="joined_at" type="timestamptz(0)" nullable="false" default="now()" comment="加入时间" />
+        <column name="left_at" type="timestamptz(0)" nullable="true" comment="离开时间" />
       </columns>
       <constraints>
         <foreign-key name="fk_topic_participant_topic_id" columns="topic_id"
           references-table="topic" references-columns="id" on-delete="CASCADE" />
         <foreign-key name="fk_topic_participant_user_id" columns="user_id" references-table="user"
           references-columns="id" />
-        <check name="ck_topic_participant_source" expression="source IN ('publisher', 'invitation')" />
+        <check name="ck_topic_participant_source" expression="source IN ('publisher', 'acceptance')" />
         <primary-key name="pk_topic_participant" columns="topic_id,user_id" />
       </constraints>
       <indexes>

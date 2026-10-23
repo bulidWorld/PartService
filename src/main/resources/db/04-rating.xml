@@ -9,7 +9,7 @@
         <column name="polarity" type="varchar(16)" nullable="false" comment="评价倾向" />
         <column name="is_active" type="boolean" nullable="false" default="true" comment="Is active" />
         <column name="sort_order" type="integer" nullable="false" default="0" comment="排序值" />
-        <column name="created_at" type="timestamptz" nullable="false" default="now()" comment="创建时间" />
+        <column name="created_at" type="timestamptz(0)" nullable="false" default="now()" comment="创建时间" />
       </columns>
       <constraints>
         <primary-key name="pk_rating_category_id" columns="id" />
@@ -34,10 +34,10 @@
         <column name="to_user_id" type="uuid" nullable="false" comment="被评价者 ID" />
         <column name="score" type="varchar(8)" nullable="false" comment="评分" />
         <column name="comment" type="varchar(500)" nullable="true" comment="评价内容" />
-        <column name="created_at" type="timestamptz" nullable="false" default="now()" comment="创建时间" />
-        <column name="updated_at" type="timestamptz" nullable="false" default="now()"
+        <column name="created_at" type="timestamptz(0)" nullable="false" default="now()" comment="创建时间" />
+        <column name="updated_at" type="timestamptz(0)" nullable="false" default="now()"
           comment="最后更新时间" />
-        <column name="deleted_at" type="timestamptz" nullable="true" comment="删除时间" />
+        <column name="deleted_at" type="timestamptz(0)" nullable="true" comment="删除时间" />
       </columns>
       <constraints>
         <primary-key name="pk_rating_id" columns="id" />
@@ -86,7 +86,7 @@
         <column name="total_count" type="integer" nullable="false" default="0" comment="评价总数" />
         <column name="good_rate" type="numeric(5,4)" nullable="false" default="0" comment="好评率" />
         <column name="bad_rate" type="numeric(5,4)" nullable="false" default="0" comment="差评率" />
-        <column name="calculated_at" type="timestamptz" nullable="false" default="now()"
+        <column name="calculated_at" type="timestamptz(0)" nullable="false" default="now()"
           comment="统计计算时间" />
         <column name="algorithm_version" type="varchar(32)" nullable="false" comment="算法版本" />
       </columns>
@@ -109,8 +109,8 @@
         <column name="confidence" type="numeric(5,4)" nullable="true" comment="置信度" />
         <column name="evidence" type="jsonb" nullable="false" default="'{}'::jsonb" comment="证据详情" />
         <column name="status" type="varchar(16)" nullable="false" default="'active'" comment="状态" />
-        <column name="created_at" type="timestamptz" nullable="false" default="now()" comment="创建时间" />
-        <column name="removed_at" type="timestamptz" nullable="true" comment="Removed at" />
+        <column name="created_at" type="timestamptz(0)" nullable="false" default="now()" comment="创建时间" />
+        <column name="removed_at" type="timestamptz(0)" nullable="true" comment="Removed at" />
       </columns>
       <constraints>
         <primary-key name="pk_user_risk_tag_id" columns="id" />

@@ -1,0 +1,24 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<task name="TC-114 停用评价分类">
+  <!--base_url=http://127.0.0.1:10201/api/v1；共享身份串行；清理失败须由调度器停止后续任务。本场景不注册用户、无数据写入，省略 finally 清理。-->
+  <taskStep order="10">
+    <rest method="GET" path="/rating-categories">
+      <header>
+        <name>Accept</name>
+        <value>application/json</value>
+      </header>
+      <auth mode="none"/>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if statusCode != 200 or not isinstance(responseBody, dict) or responseBody.get("code") != 0:
+        raise Blocked("TC-114 前提查询失败：GET /rating-categories 应返回 HTTP 200 与业务码 0")
+    if not isinstance(responseBody.get("data"), list):
+        raise Blocked("TC-114 前提查询失败：GET /rating-categories 应返回分类编码数组")
+    if not all(isinstance(item, str) for item in responseBody["data"]):
+        raise Blocked("TC-114 前提查询失败：分类编码数组元素应为字符串")
+    assert responseBody.get("requestId")
+    raise Blocked("TC-114 公开 HTTP 无停用评价分类接口，无法构造先缓存、再停用、再提交的过程；查询成功不能代替目标场景通过，目标场景阻塞")
+]]></assertionCode>
+    </rest>
+  </taskStep>
+</task>

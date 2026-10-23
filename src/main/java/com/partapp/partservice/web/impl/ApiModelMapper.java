@@ -30,9 +30,6 @@ final class ApiModelMapper {
         .minAge(x.minAge()).maxAge(x.maxAge()).expiresAt(time(x.expiresAt()));
   }
 
-  static Invitation invitation(InvitationRepository.Invitation x) {
-    return new Invitation(x.id(), x.topicId(), x.inviteeId(), x.inviterId(), x.status()).roomId(x.roomId());
-  }
 
   static Room room(RoomRepository.Room x) {
     return new Room(x.id(), x.topicId(), new ArrayList<>(x.members()), time(x.createdAt())).ownerId(x.ownerId());
@@ -53,10 +50,6 @@ final class ApiModelMapper {
         .nextCursor(x.nextCursor()).hasMore(x.hasMore());
   }
 
-  static PageOfInvitations invitations(PageResponse<InvitationRepository.Invitation> x) {
-    return new PageOfInvitations().items(x.items().stream().map(ApiModelMapper::invitation).toList())
-        .nextCursor(x.nextCursor()).hasMore(x.hasMore());
-  }
 
   static PageOfRooms rooms(PageResponse<RoomRepository.Room> x) {
     return new PageOfRooms().items(x.items().stream().map(ApiModelMapper::room).toList())

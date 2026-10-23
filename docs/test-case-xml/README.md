@@ -12,6 +12,8 @@
 
 ## 使用及验证
 
+2026-10-23 批次（TC-093 ~ TC-142）转换期间，工作区被并行会话同步重构：`invitations.yaml` 已删除，邀请/接受/拒绝接口改为 `POST /topics/{topicId}/accept` 回执模型（新增 `GET /topics/receipts`、`POST /topics/{topicId}/read`）。源用例 Markdown 仍描述旧邀请流程；部分 agent 按生成时刻的现行契约适配了新接口（112/119/120/121/142 等），其余仍按源用例旧流程编写。当前全量 `validate.py` 的 156 个错误全部是旧邀请接口「matched 0 operations」，无 XSD、参数引用或任务名问题。接口重构稳定后需统一迁移或恢复邀请接口，见 [SCHEMA-GAPS.md](SCHEMA-GAPS.md)。
+
 先在目标项目导入 `src/main/resources/rest-api/*.yaml` 的接口，base_url 使用独立测试环境（源用例默认 `http://127.0.0.1:10201/api/v1`）。XML 不保存部署地址或真实令牌。用例共享身份时必须串行运行；生成 XML 的 agent 并行工作，不代表业务用例可以并行执行。清理未确认时停止复用当前环境。
 
 离线校验需要 Python 及 lxml、PyYAML、jsonschema：

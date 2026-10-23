@@ -107,16 +107,6 @@
             </configuration>
           </execution>
           <execution>
-            <id>generate-rest-api-invitations</id>
-            <phase>generate-sources</phase>
-            <goals>
-              <goal>generate</goal>
-            </goals>
-            <configuration>
-              <inputSpec>${project.basedir}/src/main/resources/rest-api/invitations.yaml</inputSpec>
-            </configuration>
-          </execution>
-          <execution>
             <id>generate-rest-api-rooms</id>
             <phase>generate-sources</phase>
             <goals>

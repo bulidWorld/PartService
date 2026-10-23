@@ -39,11 +39,11 @@ public class TopicRepository {
   public boolean matches(Topic t, UserRepository.User u) {
     if (t.minAge() == null && t.maxAge() == null && t.genders().isEmpty())
       return true;
-    if (u.birthDate() == null)
+    if ((t.minAge() != null || t.maxAge() != null) && u.birthDate() == null)
       return false;
-    int age = Period.between(u.birthDate(), LocalDate.now()).getYears();
+    int age = u.birthDate() == null ? 0 : Period.between(u.birthDate(), LocalDate.now(ZoneOffset.UTC)).getYears();
     return (t.minAge() == null || age >= t.minAge()) && (t.maxAge() == null || age <= t.maxAge())
-        && (t.genders().isEmpty() || t.genders().contains(u.gender()));
+        && (t.genders().isEmpty() || (u.gender() != null && t.genders().contains(u.gender())));
   }
 
   public Topic getTopic(UUID id) {

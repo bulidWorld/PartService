@@ -5,7 +5,6 @@ import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
-import org.apache.ibatis.annotations.Update;
 
 /** Deletes dependent rows before their parent rows, using the existing foreign keys. */
 @Mapper
@@ -27,39 +26,22 @@ public interface AccountDeletionMapper {
       """)
   void deleteRatings(@Param("id") UUID id);
 
-  // Rooms, messages, memberships, recipients, invitations and participants cascade.
+  // Recipients and participants cascade; rooms and message history remain.
   @Delete("DELETE FROM topic WHERE publisher_id = #{id}")
   void deleteTopics(@Param("id") UUID id);
 
   @Delete("DELETE FROM topic_recipient WHERE user_id = #{id}")
   void deleteRecipients(@Param("id") UUID id);
 
-  @Delete("DELETE FROM topic_invitation WHERE inviter_id = #{id} OR invitee_id = #{id}")
-  void deleteInvitations(@Param("id") UUID id);
 
   @Delete("DELETE FROM topic_participant WHERE user_id = #{id}")
   void deleteParticipants(@Param("id") UUID id);
-
-  @Update("""
-      UPDATE chat_member SET last_read_message_id = NULL
-      WHERE last_read_message_id IN (SELECT id FROM chat_message WHERE sender_id = #{id})
-      """)
-  void clearMemberReadPositions(@Param("id") UUID id);
-
-  @Update("""
-      UPDATE chat_message_read SET last_read_message_id = NULL
-      WHERE last_read_message_id IN (SELECT id FROM chat_message WHERE sender_id = #{id})
-      """)
-  void clearMessageReadPositions(@Param("id") UUID id);
 
   @Delete("DELETE FROM chat_member WHERE user_id = #{id}")
   void deleteMembers(@Param("id") UUID id);
 
   @Delete("DELETE FROM chat_message_read WHERE user_id = #{id}")
   void deleteReadPositions(@Param("id") UUID id);
-
-  @Delete("DELETE FROM chat_message WHERE sender_id = #{id}")
-  void deleteMessages(@Param("id") UUID id);
 
   @Delete("DELETE FROM refresh_token WHERE user_id = #{id}")
   void deleteRefreshTokens(@Param("id") UUID id);

@@ -170,8 +170,8 @@ paths:
       tags:
       - Users
       operationId: deleteCurrentUser
-      summary: 注销当前账号并永久删除关联数据
-      description: 删除当前用户、身份、验证码及全部会话；同时删除其发布的主题及关联数据，以及其参与、邀请、消息和评价。不接受目标用户 ID。身份释放后可重新注册。
+      summary: 注销当前账号并保留历史消息
+      description: 删除当前用户、身份、验证码及全部会话；同时删除其发布的主题、参与、推送收件和评价，以及其聊天室成员关系和已读记录。保留聊天室、全部历史消息和其他成员的已读位置，消息发送者 ID 与聊天室主题 ID 保留原值，其他成员仍可查询历史。不接受目标用户 ID。身份释放后可重新注册。
       security:
       - bearerAuth: []
       responses:

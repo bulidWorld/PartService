@@ -26,13 +26,9 @@ public class AccountDeletionService {
     deletion.deleteRatings(id);
     deletion.deleteTopics(id);
     deletion.deleteRecipients(id);
-    deletion.deleteInvitations(id);
     deletion.deleteParticipants(id);
-    deletion.clearMemberReadPositions(id);
-    deletion.clearMessageReadPositions(id);
     deletion.deleteMembers(id);
     deletion.deleteReadPositions(id);
-    deletion.deleteMessages(id);
     deletion.deleteRefreshTokens(id);
     deletion.deleteVerificationCodes(id);
     deletion.deleteState(id);

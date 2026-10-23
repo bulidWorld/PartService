@@ -36,8 +36,6 @@ public final class Requests {
       Set<String> genders, Instant expiresAt) {
   }
 
-  public record Invite(@NotNull UUID userId) {
-  }
 
   public record Message(@NotBlank @Size(max = 64) String clientMessageId, @NotBlank String messageType, String content,
       java.util.Map<String, Object> contentMeta) {
