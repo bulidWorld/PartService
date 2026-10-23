@@ -1,10 +1,10 @@
-# TC-072 非受邀者不能操作邀请
+# TC-072 接受身份由当前令牌确定
 
-模块：邀请与参与｜优先级：P0｜执行条件：可执行｜执行记录：未执行
+模块：主题推送与参与｜优先级：P0｜执行条件：可执行｜执行记录：未执行
 
 ## 主题概述与测试目的
 
-验证非受邀者不能操作邀请，以 HTTP 响应和后续查询作为判定依据。
+验证接受身份由当前令牌确定，以公开 HTTP 响应及后续查询为依据。
 
 ## 独立执行准备
 
@@ -81,7 +81,7 @@ Content-Type: application/json
 
 成功后保存 `data.user.id → USER_C`、`data.accessToken → TOKEN_C`、`data.refreshToken → REFRESH_C`；均只在本文件中使用。
 
-### 步骤 5
+### 业务步骤（按顺序执行）
 
 ```http
 POST {{BASE_URL}}/topics
@@ -96,53 +96,52 @@ Content-Type: application/json
 }
 ```
 
-保存 `data.id → T`；检查创建结果后再继续。
-
-### 步骤 6
+HTTP 200、code=0，保存 `data.id → T`。
 
 ```http
-POST {{BASE_URL}}/topics/{{T}}/invite
-Accept: application/json
-Authorization: Bearer {{TOKEN_A}}
-Content-Type: application/json
-
-{
-  "userId": "{{USER_B}}"
-}
-```
-
-保存 `data.id → I`。
-
-### 步骤 7
-
-```http
-POST {{BASE_URL}}/invitations/{{I}}/accept
-Accept: application/json
-Authorization: Bearer {{TOKEN_C}}
-```
-
-### 步骤 8
-
-```http
-POST {{BASE_URL}}/invitations/{{I}}/reject
-Accept: application/json
-Authorization: Bearer {{TOKEN_C}}
-```
-
-### 步骤 9
-
-```http
-GET {{BASE_URL}}/invitations?status=pending&limit=20
+GET {{BASE_URL}}/topics/receipts?status=pending&limit=100
 Accept: application/json
 Authorization: Bearer {{TOKEN_B}}
 ```
 
+```http
+GET {{BASE_URL}}/topics/receipts?status=pending&limit=100
+Accept: application/json
+Authorization: Bearer {{TOKEN_C}}
+```
+
+```http
+GET {{BASE_URL}}/topics/receipts?status=pending&limit=100
+Accept: application/json
+Authorization: Bearer {{TOKEN_A}}
+```
+
+在测试环境约定的分发 SLA 内轮询并按 nextCursor 翻页，确认 B、C 各有一条 topicId=T、status=pending、roomId=null 的记录，A 没有该主题收件。记录 SLA；未约定时记录时效验收阻塞，超时缺失应有收件则失败。
+
+```http
+POST {{BASE_URL}}/topics/{{T}}/accept
+Accept: application/json
+Authorization: Bearer {{TOKEN_B}}
+```
+
+HTTP 200、code=0，data.topicId=T、status=accepted，保存非空 UUID `data.roomId → ROOM`。
+
+```http
+GET {{BASE_URL}}/rooms/{{ROOM}}
+Accept: application/json
+Authorization: Bearer {{TOKEN_B}}
+```
+
+```http
+GET {{BASE_URL}}/topics/receipts?status=pending&limit=100
+Accept: application/json
+Authorization: Bearer {{TOKEN_C}}
+```
+
 ## 期待结果
 
-
-- 各步骤先核对其预期再继续；准备请求失败或变量无法取得时停止后续业务步骤并记录阻塞，行为与预期不符时记录失败；结束前仍须清理本用例已创建的全部用户。
-- 仅判定本文件 HTTP 请求可以观察的结果；没有 HTTP 查询能力的内部存储、广播、日志等项目不计为已验证。
-- C 两次请求均 HTTP 404、code=40401，隐藏邀请存在性；B 的邀请仍为 pending，成员不变。
+- 仅用 B 令牌、无请求体调用接受；成员只有 A、B，C 的 T 收件仍 pending、roomId=null。接受接口没有代他人接受的用户参数。
+- 准备失败或变量缺失时停止后续步骤并记录失败或阻塞；无论结果如何均执行测试后清理。仅验证 HTTP 可观察结果，不推断内部数据行数。
 
 ## 测试后清理（必执行）
 

@@ -92,22 +92,17 @@ Content-Type: application/json
 ### 步骤 6
 
 ```http
-POST {{BASE_URL}}/topics/{{T}}/invite
+GET {{BASE_URL}}/topics/receipts?status=pending&limit=100
 Accept: application/json
-Authorization: Bearer {{TOKEN_A}}
-Content-Type: application/json
-
-{
-  "userId": "{{USER_B}}"
-}
+Authorization: Bearer {{TOKEN_B}}
 ```
 
-保存 `data.id → I`。
+在测试环境约定的分发 SLA 内轮询，按 `data.nextCursor` 翻页，确认 `data.items` 中存在 `topicId=T`、`status=pending`、`roomId=null` 的收件记录。未约定 SLA 则记录时效验收阻塞；在期限内未收到应有记录则失败。此步骤不接受主题。
 
 ### 步骤 7
 
 ```http
-POST {{BASE_URL}}/invitations/{{I}}/accept
+POST {{BASE_URL}}/topics/{{T}}/accept
 Accept: application/json
 Authorization: Bearer {{TOKEN_B}}
 ```
@@ -152,22 +147,17 @@ Content-Type: application/json
 ### 步骤 10
 
 ```http
-POST {{BASE_URL}}/topics/{{T2}}/invite
+GET {{BASE_URL}}/topics/receipts?status=pending&limit=100
 Accept: application/json
-Authorization: Bearer {{TOKEN_A}}
-Content-Type: application/json
-
-{
-  "userId": "{{USER_B}}"
-}
+Authorization: Bearer {{TOKEN_B}}
 ```
 
-保存 `data.id → I2`。
+在测试环境约定的分发 SLA 内轮询，按 `data.nextCursor` 翻页，确认 `data.items` 中存在 `topicId=T2`、`status=pending`、`roomId=null` 的收件记录。未约定 SLA 则记录时效验收阻塞；在期限内未收到应有记录则失败。此步骤不接受主题。
 
 ### 步骤 11
 
 ```http
-POST {{BASE_URL}}/invitations/{{I2}}/accept
+POST {{BASE_URL}}/topics/{{T2}}/accept
 Accept: application/json
 Authorization: Bearer {{TOKEN_B}}
 ```
@@ -212,22 +202,17 @@ Content-Type: application/json
 ### 步骤 14
 
 ```http
-POST {{BASE_URL}}/topics/{{T3}}/invite
+GET {{BASE_URL}}/topics/receipts?status=pending&limit=100
 Accept: application/json
-Authorization: Bearer {{TOKEN_A}}
-Content-Type: application/json
-
-{
-  "userId": "{{USER_B}}"
-}
+Authorization: Bearer {{TOKEN_B}}
 ```
 
-保存 `data.id → I3`。
+在测试环境约定的分发 SLA 内轮询，按 `data.nextCursor` 翻页，确认 `data.items` 中存在 `topicId=T3`、`status=pending`、`roomId=null` 的收件记录。未约定 SLA 则记录时效验收阻塞；在期限内未收到应有记录则失败。此步骤不接受主题。
 
 ### 步骤 15
 
 ```http
-POST {{BASE_URL}}/invitations/{{I3}}/accept
+POST {{BASE_URL}}/topics/{{T3}}/accept
 Accept: application/json
 Authorization: Bearer {{TOKEN_B}}
 ```

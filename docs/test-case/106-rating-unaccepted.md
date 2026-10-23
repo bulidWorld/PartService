@@ -1,10 +1,10 @@
-# TC-106 未接受邀请不能评价
+# TC-106 未接受主题不能评价
 
 模块：评价｜优先级：P0｜执行条件：可执行｜执行记录：未执行
 
 ## 主题概述与测试目的
 
-验证未接受邀请不能评价，以 HTTP 响应和后续查询作为判定依据。
+验证未接受主题不能评价，以 HTTP 响应和后续查询作为判定依据。
 
 ## 独立执行准备
 
@@ -92,17 +92,12 @@ Content-Type: application/json
 ### 步骤 6
 
 ```http
-POST {{BASE_URL}}/topics/{{T}}/invite
+GET {{BASE_URL}}/topics/receipts?status=pending&limit=100
 Accept: application/json
-Authorization: Bearer {{TOKEN_A}}
-Content-Type: application/json
-
-{
-  "userId": "{{USER_B}}"
-}
+Authorization: Bearer {{TOKEN_B}}
 ```
 
-保存 `data.id → I`。
+在测试环境约定的分发 SLA 内轮询，按 `data.nextCursor` 翻页，确认 `data.items` 中存在 `topicId=T`、`status=pending`、`roomId=null` 的收件记录。未约定 SLA 则记录时效验收阻塞；在期限内未收到应有记录则失败。此步骤不接受主题。
 
 ### 步骤 7
 

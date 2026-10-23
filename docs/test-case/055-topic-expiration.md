@@ -92,17 +92,12 @@ Content-Type: application/json
 ### 步骤 6
 
 ```http
-POST {{BASE_URL}}/topics/{{T}}/invite
+GET {{BASE_URL}}/topics/receipts?status=pending&limit=100
 Accept: application/json
-Authorization: Bearer {{TOKEN_A}}
-Content-Type: application/json
-
-{
-  "userId": "{{USER_B}}"
-}
+Authorization: Bearer {{TOKEN_B}}
 ```
 
-保存 `data.id → I`。
+在测试环境约定的分发 SLA 内轮询，按 `data.nextCursor` 翻页，确认 `data.items` 中存在 `topicId=T`、`status=pending`、`roomId=null` 的收件记录。未约定 SLA 则记录时效验收阻塞；在期限内未收到应有记录则失败。此步骤不接受主题。
 
 ### 步骤 7
 
@@ -119,7 +114,7 @@ Authorization: Bearer {{TOKEN_A}}
 ### 步骤 9
 
 ```http
-POST {{BASE_URL}}/invitations/{{I}}/accept
+POST {{BASE_URL}}/topics/{{T}}/accept
 Accept: application/json
 Authorization: Bearer {{TOKEN_B}}
 ```
@@ -132,12 +127,22 @@ Accept: application/json
 Authorization: Bearer {{TOKEN_B}}
 ```
 
+### 收件失效核查
+
+```http
+GET {{BASE_URL}}/topics/receipts?status=expired&limit=100
+Accept: application/json
+Authorization: Bearer {{TOKEN_B}}
+```
+
+按 nextCursor 翻页，T 的收件应为 expired、roomId=null。
+
 ## 期待结果
 
 
 - 各步骤先核对其预期再继续；准备请求失败或变量无法取得时停止后续业务步骤并记录阻塞，行为与预期不符时记录失败；结束前仍须清理本用例已创建的全部用户。
 - 仅判定本文件 HTTP 请求可以观察的结果；没有 HTTP 查询能力的内部存储、广播、日志等项目不计为已验证。
-- 到期后状态 expired；不能接受邀请，HTTP 409、code=40901，无新增成员。
+- 到期后状态 expired；不能接受主题，HTTP 409、code=40901，无新增成员。
 - 主题流不返回该过期主题，历史记录保留。
 
 ## 测试后清理（必执行）

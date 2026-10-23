@@ -1,10 +1,10 @@
-# TC-061 不能邀请自己
+# TC-061 发布者不能接受自己的主题
 
-模块：邀请与参与｜优先级：P1｜执行条件：可执行｜执行记录：未执行
+模块：主题推送与参与｜优先级：P1｜执行条件：可执行｜执行记录：未执行
 
 ## 主题概述与测试目的
 
-验证不能邀请自己，以 HTTP 响应和后续查询作为判定依据。
+验证发布者不能接受自己的主题，以公开 HTTP 响应及后续查询为依据。
 
 ## 独立执行准备
 
@@ -48,6 +48,42 @@ Content-Type: application/json
 ### 步骤 3
 
 ```http
+POST {{BASE_URL}}/auth/register
+Accept: application/json
+Content-Type: application/json
+
+{
+  "identityType": "phone",
+  "identityValue": "13900000002",
+  "code": "246810",
+  "nickname": "测试用户B",
+  "communityId": "{{COMMUNITY_A}}"
+}
+```
+
+成功后保存 `data.user.id → USER_B`、`data.accessToken → TOKEN_B`、`data.refreshToken → REFRESH_B`；均只在本文件中使用。
+
+### 步骤 4
+
+```http
+POST {{BASE_URL}}/auth/register
+Accept: application/json
+Content-Type: application/json
+
+{
+  "identityType": "phone",
+  "identityValue": "13900000003",
+  "code": "246810",
+  "nickname": "测试用户C",
+  "communityId": "{{COMMUNITY_A}}"
+}
+```
+
+成功后保存 `data.user.id → USER_C`、`data.accessToken → TOKEN_C`、`data.refreshToken → REFRESH_C`；均只在本文件中使用。
+
+### 业务步骤（按顺序执行）
+
+```http
 POST {{BASE_URL}}/topics
 Accept: application/json
 Authorization: Bearer {{TOKEN_A}}
@@ -60,27 +96,44 @@ Content-Type: application/json
 }
 ```
 
-保存 `data.id → T`；检查创建结果后再继续。
-
-### 步骤 4
+HTTP 200、code=0，保存 `data.id → T`。
 
 ```http
-POST {{BASE_URL}}/topics/{{T}}/invite
+GET {{BASE_URL}}/topics/receipts?status=pending&limit=100
+Accept: application/json
+Authorization: Bearer {{TOKEN_B}}
+```
+
+```http
+GET {{BASE_URL}}/topics/receipts?status=pending&limit=100
+Accept: application/json
+Authorization: Bearer {{TOKEN_C}}
+```
+
+```http
+GET {{BASE_URL}}/topics/receipts?status=pending&limit=100
 Accept: application/json
 Authorization: Bearer {{TOKEN_A}}
-Content-Type: application/json
+```
 
-{
-  "userId": "{{USER_A}}"
-}
+在测试环境约定的分发 SLA 内轮询并按 nextCursor 翻页，确认 B、C 各有一条 topicId=T、status=pending、roomId=null 的记录，A 没有该主题收件。记录 SLA；未约定时记录时效验收阻塞，超时缺失应有收件则失败。
+
+```http
+POST {{BASE_URL}}/topics/{{T}}/accept
+Accept: application/json
+Authorization: Bearer {{TOKEN_A}}
+```
+
+```http
+GET {{BASE_URL}}/rooms
+Accept: application/json
+Authorization: Bearer {{TOKEN_A}}
 ```
 
 ## 期待结果
 
-
-- 各步骤先核对其预期再继续；准备请求失败或变量无法取得时停止后续业务步骤并记录阻塞，行为与预期不符时记录失败；结束前仍须清理本用例已创建的全部用户。
-- 仅判定本文件 HTTP 请求可以观察的结果；没有 HTTP 查询能力的内部存储、广播、日志等项目不计为已验证。
-- HTTP 400、code=40001，不产生自邀请和重复 owner 成员。
+- 发布者接受失败，code 非 0；当前实现因无自身收件返回 404/40401。没有 topicId=T 的聊天室。
+- 准备失败或变量缺失时停止后续步骤并记录失败或阻塞；无论结果如何均执行测试后清理。仅验证 HTTP 可观察结果，不推断内部数据行数。
 
 ## 测试后清理（必执行）
 
@@ -91,6 +144,88 @@ Content-Type: application/json
 | 本次创建的用户 | 访问令牌 | 刷新令牌 |
 | --- | --- | --- |
 | USER_A | TOKEN_A | REFRESH_A |
+| USER_B | TOKEN_B | REFRESH_B |
+| USER_C | TOKEN_C | REFRESH_C |
+
+### 清理 USER_C
+
+仅在 USER_C 已创建且访问令牌过期时，先调用以下刷新请求；成功后用响应覆盖 TOKEN_C、REFRESH_C。令牌仍有效时直接注销。刷新失败时，仍尝试其他用户的清理，并记录本用户未清理；不能把凭证失效当作账号已删除。
+
+```http
+POST {{BASE_URL}}/auth/refresh
+Accept: application/json
+Content-Type: application/json
+
+{
+  "refreshToken": "{{REFRESH_C}}"
+}
+```
+
+```http
+DELETE {{BASE_URL}}/me
+Accept: application/json
+Authorization: Bearer {{TOKEN_C}}
+```
+
+注销应返回 HTTP 200、`code=0`、`data={}`、非空 `requestId`。随后核查旧访问令牌和刷新令牌均已失效：
+
+```http
+GET {{BASE_URL}}/me
+Accept: application/json
+Authorization: Bearer {{TOKEN_C}}
+```
+
+```http
+POST {{BASE_URL}}/auth/refresh
+Accept: application/json
+Content-Type: application/json
+
+{
+  "refreshToken": "{{REFRESH_C}}"
+}
+```
+
+以上两个核查请求均应返回 HTTP 401、`code=40101`；本用户在用例中通过注册、登录、刷新签发过的其他令牌，也分别使用相同接口核查失效。`/auth/logout` 只撤销刷新会话，不能代替本节的账号注销。
+
+### 清理 USER_B
+
+仅在 USER_B 已创建且访问令牌过期时，先调用以下刷新请求；成功后用响应覆盖 TOKEN_B、REFRESH_B。令牌仍有效时直接注销。刷新失败时，仍尝试其他用户的清理，并记录本用户未清理；不能把凭证失效当作账号已删除。
+
+```http
+POST {{BASE_URL}}/auth/refresh
+Accept: application/json
+Content-Type: application/json
+
+{
+  "refreshToken": "{{REFRESH_B}}"
+}
+```
+
+```http
+DELETE {{BASE_URL}}/me
+Accept: application/json
+Authorization: Bearer {{TOKEN_B}}
+```
+
+注销应返回 HTTP 200、`code=0`、`data={}`、非空 `requestId`。随后核查旧访问令牌和刷新令牌均已失效：
+
+```http
+GET {{BASE_URL}}/me
+Accept: application/json
+Authorization: Bearer {{TOKEN_B}}
+```
+
+```http
+POST {{BASE_URL}}/auth/refresh
+Accept: application/json
+Content-Type: application/json
+
+{
+  "refreshToken": "{{REFRESH_B}}"
+}
+```
+
+以上两个核查请求均应返回 HTTP 401、`code=40101`；本用户在用例中通过注册、登录、刷新签发过的其他令牌，也分别使用相同接口核查失效。`/auth/logout` 只撤销刷新会话，不能代替本节的账号注销。
 
 ### 清理 USER_A
 

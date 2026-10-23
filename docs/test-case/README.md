@@ -4,11 +4,13 @@
 
 **所有测试操作与核查仅使用公开 HTTP 接口。** 已移除 SQL、后台造数、直查数据、日志文件读取、服务重启及故障注入步骤。无法通过现有 HTTP 完成的场景保留编号并明确记录阻塞；部分可验证的场景不宣称内部状态已通过验收。
 
+旧邀请场景已替换为主题推送、收件与接受场景；保留原编号和文件名以维持已有链接。接受请求无请求体，身份取自访问令牌，返回 `topicId/status/roomId/readAt/createdAt`。
+
 ## 执行方式
 
 1. 使用已运行、无用户及业务数据的独立测试环境，填写文件内 BASE_URL。允许已有可查询的基础字典；用例本身不部署、清库或重置环境。
 2. 从该文件 GET /communities 响应选取 COMMUNITY_A；跨社区场景还需另一个 COMMUNITY_B。若社区不足，直接阻塞。当前没有创建社区的 HTTP 接口，不能补写数据或用固定 UUID 绕过。
-3. 涉及分类时，由该文件 GET /rating-categories 确认所需编码；用户、主题、邀请、消息和评价均由同一文件的 HTTP 请求创建。
+3. 涉及分类时，由该文件 GET /rating-categories 确认所需编码；用户、主题、消息和评价均由同一文件的 HTTP 请求创建；主题收件由发布自动触发生成。
 4. 按顺序执行请求，替换本文件取得的变量并核查后续 HTTP 查询结果。每次注册成功立即记录用户 ID 和令牌；预期失败的注册若意外成功，也纳入清理名单。
 5. 无论通过、失败或中途阻塞，均执行文件内“测试后清理”：逐个使用本次创建用户自己的访问令牌调用 `DELETE /me`，再核查旧访问/刷新令牌失效。清理失败仍尝试其他用户，并记录逐用户清理结果；全部清理确认成功后才允许复用环境或执行下一用例。退出登录 `/auth/logout` 不能代替账号注销。
 6. 冷却、过期和令牌有效期通过真实时间等待。缺少接口的场景记录阻塞，不使用后台、运维或数据库手段替代。
@@ -17,7 +19,7 @@
 
 ## 契约及执行边界
 
-- HTTP 路径与请求字段以 src/main/resources/rest-api/*.yaml 的 29 个操作为准，业务语义参照 docs/requirements/；没有臆造初始化或测试管理接口。
+- HTTP 路径与请求字段以 src/main/resources/rest-api/*.yaml 的 28 个操作为准，业务语义参照 docs/requirements/；没有臆造初始化或测试管理接口。
 - 响应统一字段为 code/message/data/requestId；分页为 items/nextCursor/hasMore。验证码发送响应和评价摘要保留 YAML 明确的 snake_case 字段。
 - 常用错误预期为 400/40001、401/40101、403/40301、404/40401、409/40901、429/42901；尚未统一的错误语义在具体用例中注明。
 - 所有会成功创建用户的 118 个编号用例均包含独立的注销、令牌失效核查及清理结果记录；TC-018 补存注册凭证，TC-136 仅发送非法 JSON，不应创建用户。相同邮箱/手机号仅在前一用例清理成功后串行复用，不能并行注册同一身份。
@@ -25,8 +27,8 @@
 - 有效邮箱统一为 782213745@qq.com，验证码示例为数字字符串 246810。按现有约定不改验证码开关；源码登录仍校验验证码的差异需记录，不能通过后台绕过。
 - 完全空库且社区字典也为空时，TC-001 可验证空列表；注册链路因没有社区创建 HTTP 接口而阻塞。已有社区字典时可以执行其余前提满足的场景，不能同时声称完全空社区初态成立。
 - TC-032、TC-056、TC-075 必须在各自注册后真实等待七天；不会借用其他文件的老用户。
-- 停用社区、封禁、停用分类、算法控制、日志审计、重启和中途失败缺少公开 HTTP 入口，相关场景明确阻塞。已读接口只能验证响应，缺少已读查询接口时不能证明状态已保存。
-- 自动推送、单侧年龄、匿名、申诉、附件规则等缺口保留待确认说明；未满足的前提不能算通过。
+- 停用社区、封禁、停用分类、算法控制、日志审计、重启和中途失败缺少公开 HTTP 入口，相关场景明确阻塞。主题已读可由收件列表的 readAt 核查；聊天室已读是否可查仍以对应接口字段为准。
+- 外部通知送达、单侧年龄、匿名、申诉、附件规则等缺口保留待确认说明；未满足的前提不能算通过。
 
 ## 用例索引
 
@@ -90,27 +92,27 @@
 | TC-056 | [切换社区不改变已发布主题归属](056-topic-community-snapshot.md) | 主题 | P1 | 需真实等待 7 天 |
 | TC-057 | [主题流游标分页不重复不遗漏](057-topic-pagination.md) | 主题 | P1 | 可执行 |
 | TC-058 | [仅提供一个年龄边界的规则确认](058-topic-single-age-bound.md) | 主题 | P1 | 待规则确认 |
-| TC-059 | [发布者邀请同社区用户](059-invite-create.md) | 邀请与参与 | P0 | 可执行 |
-| TC-060 | [非发布者不能发出邀请](060-invite-non-owner.md) | 邀请与参与 | P1 | 可执行 |
-| TC-061 | [不能邀请自己](061-invite-self.md) | 邀请与参与 | P1 | 可执行 |
-| TC-062 | [不能跨社区邀请](062-invite-other-community.md) | 邀请与参与 | P1 | 可执行 |
-| TC-063 | [不能邀请不存在的用户](063-invite-unknown-user.md) | 邀请与参与 | P1 | 可执行 |
-| TC-064 | [不能邀请不满足约束的用户](064-invite-mismatch.md) | 邀请与参与 | P1 | 可执行 |
-| TC-065 | [重复发出邀请保持一条记录](065-invite-duplicate.md) | 邀请与参与 | P1 | 可执行 |
-| TC-066 | [关闭主题不能产生新邀请](066-invite-closed-topic.md) | 邀请与参与 | P1 | 可执行 |
-| TC-067 | [接受邀请自动进入聊天室](067-invitation-accept.md) | 邀请与参与 | P0 | 可执行 |
-| TC-068 | [拒绝邀请不加入聊天室](068-invitation-reject.md) | 邀请与参与 | P1 | 可执行 |
-| TC-069 | [重复接受幂等且共享同一聊天室](069-invitation-accept-retry.md) | 邀请与参与 | P0 | 可执行 |
-| TC-070 | [重复拒绝保持最终状态](070-invitation-reject-retry.md) | 邀请与参与 | P1 | 可执行 |
-| TC-071 | [已接受邀请不可变为拒绝](071-invitation-accepted-reject.md) | 邀请与参与 | P1 | 可执行 |
-| TC-072 | [非受邀者不能操作邀请](072-invitation-forged-actor.md) | 邀请与参与 | P0 | 可执行 |
-| TC-073 | [主题关闭后不能接受待处理邀请](073-invitation-accept-closed.md) | 邀请与参与 | P1 | 可执行 |
-| TC-074 | [接受时重新校验用户资料](074-invitation-recheck-profile.md) | 邀请与参与 | P1 | 可执行 |
-| TC-075 | [接受时重新校验社区归属](075-invitation-recheck-community.md) | 邀请与参与 | P1 | 需真实等待 7 天 |
-| TC-076 | [邀请收件列表按用户隔离](076-invitations-isolation.md) | 邀请与参与 | P1 | 可执行 |
-| TC-077 | [邀请列表游标分页](077-invitations-pagination.md) | 邀请与参与 | P1 | 可执行 |
-| TC-078 | [并发接受不产生重复成员](078-invitation-concurrent-accept.md) | 邀请与参与 | P1 | 可执行 |
-| TC-079 | [主题自动推送给所有匹配用户](079-topic-automatic-distribution.md) | 邀请与参与 | P1 | 待契约确认 |
+| TC-059 | [发布后自动生成主题收件](059-invite-create.md) | 主题推送与参与 | P0 | 可执行 |
+| TC-060 | [首次接受前不创建聊天室](060-invite-non-owner.md) | 主题推送与参与 | P1 | 可执行 |
+| TC-061 | [发布者不能接受自己的主题](061-invite-self.md) | 主题推送与参与 | P1 | 可执行 |
+| TC-062 | [跨社区用户不收到且不能接受主题](062-invite-other-community.md) | 主题推送与参与 | P1 | 可执行 |
+| TC-063 | [接受不存在的主题](063-invite-unknown-user.md) | 主题推送与参与 | P1 | 可执行 |
+| TC-064 | [不匹配用户不收到且不能接受主题](064-invite-mismatch.md) | 主题推送与参与 | P1 | 可执行 |
+| TC-065 | [反复查询不重复生成收件](065-invite-duplicate.md) | 主题推送与参与 | P1 | 可执行 |
+| TC-066 | [关闭使未接受收件失效](066-invite-closed-topic.md) | 主题推送与参与 | P1 | 可执行 |
+| TC-067 | [首次接受创建聊天室并加入双方](067-invitation-accept.md) | 主题推送与参与 | P0 | 可执行 |
+| TC-068 | [忽略主题不产生参与关系](068-invitation-reject.md) | 主题推送与参与 | P1 | 可执行 |
+| TC-069 | [重复接受返回同一聊天室](069-invitation-accept-retry.md) | 主题推送与参与 | P0 | 可执行 |
+| TC-070 | [过期后已接受用户重试仍成功](070-invitation-reject-retry.md) | 主题推送与参与 | P1 | 需自然等待过期 |
+| TC-071 | [主题收件已读持久化与幂等](071-invitation-accepted-reject.md) | 主题推送与参与 | P1 | 可执行 |
+| TC-072 | [接受身份由当前令牌确定](072-invitation-forged-actor.md) | 主题推送与参与 | P0 | 可执行 |
+| TC-073 | [关闭后不能新增接受者](073-invitation-accept-closed.md) | 主题推送与参与 | P1 | 可执行 |
+| TC-074 | [接受时重新校验用户资料](074-invitation-recheck-profile.md) | 主题推送与参与 | P1 | 可执行 |
+| TC-075 | [接受时重新校验社区归属](075-invitation-recheck-community.md) | 主题推送与参与 | P1 | 需真实等待 7 天 |
+| TC-076 | [主题收件按用户与状态隔离](076-invitations-isolation.md) | 主题推送与参与 | P1 | 可执行 |
+| TC-077 | [主题收件游标分页无重复遗漏](077-invitations-pagination.md) | 主题推送与参与 | P1 | 可执行 |
+| TC-078 | [多用户并发首次接受共享聊天室](078-invitation-concurrent-accept.md) | 主题推送与参与 | P1 | 可执行 |
+| TC-079 | [自动分发排除跨社区及不匹配用户](079-topic-automatic-distribution.md) | 主题推送与参与 | P1 | 可执行 |
 | TC-080 | [成员发送并读取文本消息](080-chat-send.md) | 聊天 | P0 | 可执行 |
 | TC-081 | [同一客户端消息 ID 重试幂等](081-chat-message-retry.md) | 聊天 | P0 | 可执行 |
 | TC-082 | [不同发送者可以使用相同客户端消息 ID](082-chat-two-senders.md) | 聊天 | P1 | 可执行 |
@@ -137,7 +139,7 @@
 | TC-103 | [共同参与者提交差评](103-rating-bad.md) | 评价 | P1 | 可执行 |
 | TC-104 | [评分以外的分类和评论可省略](104-rating-minimal.md) | 评价 | P1 | 可执行 |
 | TC-105 | [不能评价自己](105-rating-self.md) | 评价 | P1 | 可执行 |
-| TC-106 | [未接受邀请不能评价](106-rating-unaccepted.md) | 评价 | P0 | 可执行 |
+| TC-106 | [未接受主题不能评价](106-rating-unaccepted.md) | 评价 | P0 | 可执行 |
 | TC-107 | [共同参与其他主题不能跨主题评价](107-rating-cross-topic.md) | 评价 | P1 | 可执行 |
 | TC-108 | [同主题同方向评价只保存一次](108-rating-duplicate.md) | 评价 | P0 | 可执行 |
 | TC-109 | [双方可以分别互评](109-rating-mutual.md) | 评价 | P1 | 可执行 |
@@ -172,7 +174,7 @@
 | TC-138 | [请求链路 ID 自动生成和透传](138-request-id.md) | 通用 | P1 | 可执行 |
 | TC-139 | [完整业务链路审计与敏感信息脱敏](139-audit-log-redaction.md) | 通用 | P1 | 阻塞：缺少 HTTP 接口 |
 | TC-140 | [服务重启后用户主题成员消息评价仍存在](140-persistence-restart.md) | 通用 | P0 | 阻塞：缺少 HTTP 接口 |
-| TC-141 | [接受邀请写入故障时整体回滚](141-transaction-accept-rollback.md) | 通用 | P1 | 阻塞：缺少 HTTP 接口 |
+| TC-141 | [接受主题写入故障时整体回滚](141-transaction-accept-rollback.md) | 通用 | P1 | 阻塞：缺少 HTTP 接口 |
 | TC-142 | [注册到参与聊天互评完整链路](142-e2e.md) | 端到端 | P0 | 可执行 |
 
 ## 28 个 HTTP 操作覆盖
@@ -184,25 +186,24 @@
 | `POST /auth/login` | `login` | [TC-019](019-login-email.md)、[TC-020](020-login-unregistered.md) |
 | `POST /auth/refresh` | `refresh` | [TC-021](021-refresh-token.md)、[TC-022](022-invalid-refresh-token.md)、[TC-023](023-logout-revokes-refresh.md)、[TC-024](024-logout-other-user.md) |
 | `POST /auth/logout` | `logout` | [TC-023](023-logout-revokes-refresh.md)、[TC-024](024-logout-other-user.md) |
-| `GET /invitations` | `listInvitations` | [TC-059](059-invite-create.md)、[TC-060](060-invite-non-owner.md)、[TC-062](062-invite-other-community.md)、[TC-065](065-invite-duplicate.md) |
-| `POST /invitations/{invitationId}/accept` | `acceptInvitation` | [TC-055](055-topic-expiration.md)、[TC-067](067-invitation-accept.md)、[TC-069](069-invitation-accept-retry.md)、[TC-070](070-invitation-reject-retry.md) |
-| `POST /invitations/{invitationId}/reject` | `rejectInvitation` | [TC-068](068-invitation-reject.md)、[TC-070](070-invitation-reject-retry.md)、[TC-071](071-invitation-accepted-reject.md)、[TC-072](072-invitation-forged-actor.md) |
 | `GET /me/rating-summary` | `getMyRatingSummary` | [TC-106](106-rating-unaccepted.md)、[TC-115](115-rating-empty-summary.md)、[TC-116](116-rating-summary-counts.md)、[TC-119](119-rating-concurrent.md) |
 | `POST /topics/{topicId}/ratings` | `rateTopicParticipant` | [TC-101](101-rating-good.md)、[TC-102](102-rating-neutral.md)、[TC-103](103-rating-bad.md)、[TC-104](104-rating-minimal.md) |
 | `GET /rating-categories` | `listRatingCategories` | [TC-101](101-rating-good.md)、[TC-102](102-rating-neutral.md)、[TC-103](103-rating-bad.md)、[TC-105](105-rating-self.md) |
 | `GET /users/{userId}/ratings` | `listUserRatings` | [TC-101](101-rating-good.md)、[TC-106](106-rating-unaccepted.md)、[TC-108](108-rating-duplicate.md)、[TC-109](109-rating-mutual.md) |
 | `GET /rooms` | `listRooms` | [TC-036](036-topic-missing-title.md)、[TC-037](037-topic-blank-title.md)、[TC-038](038-topic-missing-detail.md)、[TC-039](039-topic-blank-detail.md) |
-| `GET /rooms/{roomId}` | `getRoom` | [TC-067](067-invitation-accept.md)、[TC-069](069-invitation-accept-retry.md)、[TC-071](071-invitation-accepted-reject.md)、[TC-078](078-invitation-concurrent-accept.md) |
+| `GET /rooms/{roomId}` | `getRoom` | [TC-067](067-invitation-accept.md)、[TC-069](069-invitation-accept-retry.md)、[TC-073](073-invitation-accept-closed.md)、[TC-078](078-invitation-concurrent-accept.md) |
 | `GET /rooms/{roomId}/messages` | `listMessages` | [TC-080](080-chat-send.md)、[TC-081](081-chat-message-retry.md)、[TC-082](082-chat-two-senders.md)、[TC-083](083-chat-empty-text.md) |
 | `POST /rooms/{roomId}/messages` | `sendMessage` | [TC-080](080-chat-send.md)、[TC-081](081-chat-message-retry.md)、[TC-082](082-chat-two-senders.md)、[TC-083](083-chat-empty-text.md) |
 | `POST /rooms/{roomId}/read` | `markRoomRead` | [TC-091](091-chat-outsider-read.md)、[TC-093](093-chat-read-position.md)、[TC-097](097-chat-wrong-room-read.md)、[TC-142](142-e2e.md) |
 | `POST /rooms/{roomId}/messages/{messageId}/recall` | `recallMessage` | [TC-092](092-chat-outsider-recall.md)、[TC-094](094-chat-recall-self.md)、[TC-095](095-chat-recall-idempotent.md)、[TC-096](096-chat-wrong-room-recall.md) |
+| `GET /topics/receipts` | `listTopicReceipts` | [TC-059](059-invite-create.md)、[TC-071](071-invitation-accepted-reject.md)、[TC-076](076-invitations-isolation.md)、[TC-077](077-invitations-pagination.md) |
+| `POST /topics/{topicId}/accept` | `acceptTopic` | [TC-067](067-invitation-accept.md)、[TC-069](069-invitation-accept-retry.md)、[TC-070](070-invitation-reject-retry.md)、[TC-078](078-invitation-concurrent-accept.md) |
+| `POST /topics/{topicId}/read` | `readTopic` | [TC-068](068-invitation-reject.md)、[TC-071](071-invitation-accepted-reject.md) |
 | `GET /topics` | `listTopics` | [TC-035](035-topic-create.md)、[TC-036](036-topic-missing-title.md)、[TC-037](037-topic-blank-title.md)、[TC-038](038-topic-missing-detail.md) |
 | `POST /topics` | `createTopic` | [TC-035](035-topic-create.md)、[TC-036](036-topic-missing-title.md)、[TC-037](037-topic-blank-title.md)、[TC-038](038-topic-missing-detail.md) |
 | `GET /topics/{topicId}` | `getTopic` | [TC-035](035-topic-create.md)、[TC-049](049-topic-cross-community.md)、[TC-050](050-topic-update-owner.md)、[TC-051](051-topic-forbidden-update.md) |
 | `PATCH /topics/{topicId}` | `updateTopic` | [TC-050](050-topic-update-owner.md)、[TC-051](051-topic-forbidden-update.md) |
 | `POST /topics/{topicId}/close` | `closeTopic` | [TC-052](052-topic-forbidden-close.md)、[TC-053](053-topic-close.md)、[TC-054](054-topic-default-open-feed.md)、[TC-066](066-invite-closed-topic.md) |
-| `POST /topics/{topicId}/invite` | `inviteUser` | [TC-055](055-topic-expiration.md)、[TC-059](059-invite-create.md)、[TC-060](060-invite-non-owner.md)、[TC-061](061-invite-self.md) |
 | `DELETE /me` | `deleteCurrentUser` | 所有创建用户的用例的“测试后清理”，如 [TC-007](007-email-register.md)、[TC-017](017-duplicate-nickname.md)、[TC-142](142-e2e.md) |
 | `GET /me` | `getCurrentUser` | [TC-007](007-email-register.md)、[TC-008](008-phone-register.md)、[TC-009](009-register-missing-nickname.md)、[TC-010](010-register-blank-nickname.md) |
 | `PATCH /me` | `updateCurrentUser` | [TC-025](025-profile-update.md)、[TC-026](026-profile-partial.md)、[TC-027](027-profile-invalid-gender.md)、[TC-028](028-profile-future-birth.md) |

@@ -1,10 +1,10 @@
-# TC-067 接受邀请自动进入聊天室
+# TC-067 首次接受创建聊天室并加入双方
 
-模块：邀请与参与｜优先级：P0｜执行条件：可执行｜执行记录：未执行
+模块：主题推送与参与｜优先级：P0｜执行条件：可执行｜执行记录：未执行
 
 ## 主题概述与测试目的
 
-验证接受邀请自动进入聊天室，以 HTTP 响应和后续查询作为判定依据。
+验证首次接受创建聊天室并加入双方，以公开 HTTP 响应及后续查询为依据。
 
 ## 独立执行准备
 
@@ -66,6 +66,24 @@ Content-Type: application/json
 ### 步骤 4
 
 ```http
+POST {{BASE_URL}}/auth/register
+Accept: application/json
+Content-Type: application/json
+
+{
+  "identityType": "phone",
+  "identityValue": "13900000003",
+  "code": "246810",
+  "nickname": "测试用户C",
+  "communityId": "{{COMMUNITY_A}}"
+}
+```
+
+成功后保存 `data.user.id → USER_C`、`data.accessToken → TOKEN_C`、`data.refreshToken → REFRESH_C`；均只在本文件中使用。
+
+### 业务步骤（按顺序执行）
+
+```http
 POST {{BASE_URL}}/topics
 Accept: application/json
 Authorization: Bearer {{TOKEN_A}}
@@ -78,34 +96,41 @@ Content-Type: application/json
 }
 ```
 
-保存 `data.id → T`；检查创建结果后再继续。
-
-### 步骤 5
+HTTP 200、code=0，保存 `data.id → T`。
 
 ```http
-POST {{BASE_URL}}/topics/{{T}}/invite
-Accept: application/json
-Authorization: Bearer {{TOKEN_A}}
-Content-Type: application/json
-
-{
-  "userId": "{{USER_B}}"
-}
-```
-
-保存 `data.id → I`。
-
-### 步骤 6
-
-```http
-POST {{BASE_URL}}/invitations/{{I}}/accept
+GET {{BASE_URL}}/topics/receipts?status=pending&limit=100
 Accept: application/json
 Authorization: Bearer {{TOKEN_B}}
 ```
 
-保存 `data.roomId → ROOM`，必须为非空 UUID。
+```http
+GET {{BASE_URL}}/topics/receipts?status=pending&limit=100
+Accept: application/json
+Authorization: Bearer {{TOKEN_C}}
+```
 
-### 步骤 7
+```http
+GET {{BASE_URL}}/topics/receipts?status=pending&limit=100
+Accept: application/json
+Authorization: Bearer {{TOKEN_A}}
+```
+
+在测试环境约定的分发 SLA 内轮询并按 nextCursor 翻页，确认 B、C 各有一条 topicId=T、status=pending、roomId=null 的记录，A 没有该主题收件。记录 SLA；未约定时记录时效验收阻塞，超时缺失应有收件则失败。
+
+```http
+GET {{BASE_URL}}/rooms
+Accept: application/json
+Authorization: Bearer {{TOKEN_A}}
+```
+
+```http
+POST {{BASE_URL}}/topics/{{T}}/accept
+Accept: application/json
+Authorization: Bearer {{TOKEN_B}}
+```
+
+HTTP 200、code=0，data.topicId=T、status=accepted，保存非空 UUID `data.roomId → ROOM`。
 
 ```http
 GET {{BASE_URL}}/rooms/{{ROOM}}
@@ -113,30 +138,16 @@ Accept: application/json
 Authorization: Bearer {{TOKEN_B}}
 ```
 
-### 步骤 8
-
 ```http
-GET {{BASE_URL}}/rooms
-Accept: application/json
-Authorization: Bearer {{TOKEN_A}}
-```
-
-### 步骤 9
-
-```http
-GET {{BASE_URL}}/rooms
+GET {{BASE_URL}}/topics/receipts?status=accepted&limit=100
 Accept: application/json
 Authorization: Bearer {{TOKEN_B}}
 ```
 
 ## 期待结果
 
-
-- 各步骤先核对其预期再继续；准备请求失败或变量无法取得时停止后续业务步骤并记录阻塞，行为与预期不符时记录失败；结束前仍须清理本用例已创建的全部用户。
-- 仅判定本文件 HTTP 请求可以观察的结果；没有 HTTP 查询能力的内部存储、广播、日志等项目不计为已验证。
-- 接受返回 status=accepted、topicId=T、roomId=ROOM；双方列表指向同一 ROOM。
-- GET /rooms/{roomId} 返回的 members 包含 USER_A、USER_B，各出现一次。
-- 接受成功后立即查询聊天室，B 应已是成员；本用例只核查接口可见一致性，不证明内部事务实现。
+- 接受前 A 无 T 的房间；接受后 ROOM 的 topicId=T，成员恰好 A(owner)、B(member)，C 未加入；B 收件 accepted 且 roomId=ROOM。
+- 准备失败或变量缺失时停止后续步骤并记录失败或阻塞；无论结果如何均执行测试后清理。仅验证 HTTP 可观察结果，不推断内部数据行数。
 
 ## 测试后清理（必执行）
 
@@ -148,6 +159,47 @@ Authorization: Bearer {{TOKEN_B}}
 | --- | --- | --- |
 | USER_A | TOKEN_A | REFRESH_A |
 | USER_B | TOKEN_B | REFRESH_B |
+| USER_C | TOKEN_C | REFRESH_C |
+
+### 清理 USER_C
+
+仅在 USER_C 已创建且访问令牌过期时，先调用以下刷新请求；成功后用响应覆盖 TOKEN_C、REFRESH_C。令牌仍有效时直接注销。刷新失败时，仍尝试其他用户的清理，并记录本用户未清理；不能把凭证失效当作账号已删除。
+
+```http
+POST {{BASE_URL}}/auth/refresh
+Accept: application/json
+Content-Type: application/json
+
+{
+  "refreshToken": "{{REFRESH_C}}"
+}
+```
+
+```http
+DELETE {{BASE_URL}}/me
+Accept: application/json
+Authorization: Bearer {{TOKEN_C}}
+```
+
+注销应返回 HTTP 200、`code=0`、`data={}`、非空 `requestId`。随后核查旧访问令牌和刷新令牌均已失效：
+
+```http
+GET {{BASE_URL}}/me
+Accept: application/json
+Authorization: Bearer {{TOKEN_C}}
+```
+
+```http
+POST {{BASE_URL}}/auth/refresh
+Accept: application/json
+Content-Type: application/json
+
+{
+  "refreshToken": "{{REFRESH_C}}"
+}
+```
+
+以上两个核查请求均应返回 HTTP 401、`code=40101`；本用户在用例中通过注册、登录、刷新签发过的其他令牌，也分别使用相同接口核查失效。`/auth/logout` 只撤销刷新会话，不能代替本节的账号注销。
 
 ### 清理 USER_B
 

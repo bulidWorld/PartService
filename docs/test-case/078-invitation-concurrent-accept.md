@@ -1,10 +1,10 @@
-# TC-078 并发接受不产生重复成员
+# TC-078 多用户并发首次接受共享聊天室
 
-模块：邀请与参与｜优先级：P1｜执行条件：可执行｜执行记录：未执行
+模块：主题推送与参与｜优先级：P1｜执行条件：可执行｜执行记录：未执行
 
 ## 主题概述与测试目的
 
-验证并发接受不产生重复成员，以 HTTP 响应和后续查询作为判定依据。
+验证多用户并发首次接受共享聊天室，以公开 HTTP 响应及后续查询为依据。
 
 ## 独立执行准备
 
@@ -66,6 +66,24 @@ Content-Type: application/json
 ### 步骤 4
 
 ```http
+POST {{BASE_URL}}/auth/register
+Accept: application/json
+Content-Type: application/json
+
+{
+  "identityType": "phone",
+  "identityValue": "13900000003",
+  "code": "246810",
+  "nickname": "测试用户C",
+  "communityId": "{{COMMUNITY_A}}"
+}
+```
+
+成功后保存 `data.user.id → USER_C`、`data.accessToken → TOKEN_C`、`data.refreshToken → REFRESH_C`；均只在本文件中使用。
+
+### 业务步骤（按顺序执行）
+
+```http
 POST {{BASE_URL}}/topics
 Accept: application/json
 Authorization: Bearer {{TOKEN_A}}
@@ -78,40 +96,43 @@ Content-Type: application/json
 }
 ```
 
-保存 `data.id → T`；检查创建结果后再继续。
-
-### 步骤 5
+HTTP 200、code=0，保存 `data.id → T`。
 
 ```http
-POST {{BASE_URL}}/topics/{{T}}/invite
-Accept: application/json
-Authorization: Bearer {{TOKEN_A}}
-Content-Type: application/json
-
-{
-  "userId": "{{USER_B}}"
-}
-```
-
-保存 `data.id → I`。
-
-### 步骤 6
-
-使用两个并行请求同时发送以下完全相同的请求，不等待第一个响应再发送第二个。
-
-### 步骤 7
-
-```http
-POST {{BASE_URL}}/invitations/{{I}}/accept
+GET {{BASE_URL}}/topics/receipts?status=pending&limit=100
 Accept: application/json
 Authorization: Bearer {{TOKEN_B}}
 ```
 
-### 步骤 8
+```http
+GET {{BASE_URL}}/topics/receipts?status=pending&limit=100
+Accept: application/json
+Authorization: Bearer {{TOKEN_C}}
+```
 
-保存成功结果 data.roomId → ROOM。
+```http
+GET {{BASE_URL}}/topics/receipts?status=pending&limit=100
+Accept: application/json
+Authorization: Bearer {{TOKEN_A}}
+```
 
-### 步骤 9
+在测试环境约定的分发 SLA 内轮询并按 nextCursor 翻页，确认 B、C 各有一条 topicId=T、status=pending、roomId=null 的记录，A 没有该主题收件。记录 SLA；未约定时记录时效验收阻塞，超时缺失应有收件则失败。
+
+将下面 B、C 两个请求并发发出，每个请求同时再发送一次重试，不等待其他响应。
+
+```http
+POST {{BASE_URL}}/topics/{{T}}/accept
+Accept: application/json
+Authorization: Bearer {{TOKEN_B}}
+```
+
+```http
+POST {{BASE_URL}}/topics/{{T}}/accept
+Accept: application/json
+Authorization: Bearer {{TOKEN_C}}
+```
+
+四个响应均 HTTP 200/code=0、status=accepted，保存共同的 data.roomId → ROOM。
 
 ```http
 GET {{BASE_URL}}/rooms/{{ROOM}}
@@ -119,15 +140,11 @@ Accept: application/json
 Authorization: Bearer {{TOKEN_B}}
 ```
 
-### 步骤 10
-
 ```http
 GET {{BASE_URL}}/rooms
 Accept: application/json
 Authorization: Bearer {{TOKEN_A}}
 ```
-
-### 步骤 11
 
 ```http
 GET {{BASE_URL}}/rooms
@@ -135,13 +152,16 @@ Accept: application/json
 Authorization: Bearer {{TOKEN_B}}
 ```
 
+```http
+GET {{BASE_URL}}/rooms
+Accept: application/json
+Authorization: Bearer {{TOKEN_C}}
+```
+
 ## 期待结果
 
-
-- 各步骤先核对其预期再继续；准备请求失败或变量无法取得时停止后续业务步骤并记录阻塞，行为与预期不符时记录失败；结束前仍须清理本用例已创建的全部用户。
-- 仅判定本文件 HTTP 请求可以观察的结果；没有 HTTP 查询能力的内部存储、广播、日志等项目不计为已验证。
-- 两次结果一致或存在可重试冲突；最终 I=accepted，USER_B 有且仅有一个成员和参与关系。
-- GET /rooms（A、B）的列表中，topicId=T 各只出现一个房间且 roomId 相同。
+- 四个响应的 roomId 相同；ROOM 成员恰好 A(owner)、B(member)、C(member)，三人的列表中 T 均只对应一个房间。
+- 准备失败或变量缺失时停止后续步骤并记录失败或阻塞；无论结果如何均执行测试后清理。仅验证 HTTP 可观察结果，不推断内部数据行数。
 
 ## 测试后清理（必执行）
 
@@ -153,6 +173,47 @@ Authorization: Bearer {{TOKEN_B}}
 | --- | --- | --- |
 | USER_A | TOKEN_A | REFRESH_A |
 | USER_B | TOKEN_B | REFRESH_B |
+| USER_C | TOKEN_C | REFRESH_C |
+
+### 清理 USER_C
+
+仅在 USER_C 已创建且访问令牌过期时，先调用以下刷新请求；成功后用响应覆盖 TOKEN_C、REFRESH_C。令牌仍有效时直接注销。刷新失败时，仍尝试其他用户的清理，并记录本用户未清理；不能把凭证失效当作账号已删除。
+
+```http
+POST {{BASE_URL}}/auth/refresh
+Accept: application/json
+Content-Type: application/json
+
+{
+  "refreshToken": "{{REFRESH_C}}"
+}
+```
+
+```http
+DELETE {{BASE_URL}}/me
+Accept: application/json
+Authorization: Bearer {{TOKEN_C}}
+```
+
+注销应返回 HTTP 200、`code=0`、`data={}`、非空 `requestId`。随后核查旧访问令牌和刷新令牌均已失效：
+
+```http
+GET {{BASE_URL}}/me
+Accept: application/json
+Authorization: Bearer {{TOKEN_C}}
+```
+
+```http
+POST {{BASE_URL}}/auth/refresh
+Accept: application/json
+Content-Type: application/json
+
+{
+  "refreshToken": "{{REFRESH_C}}"
+}
+```
+
+以上两个核查请求均应返回 HTTP 401、`code=40101`；本用户在用例中通过注册、登录、刷新签发过的其他令牌，也分别使用相同接口核查失效。`/auth/logout` 只撤销刷新会话，不能代替本节的账号注销。
 
 ### 清理 USER_B
 

@@ -1,10 +1,10 @@
-# TC-079 主题自动推送给所有匹配用户
+# TC-079 自动分发排除跨社区及不匹配用户
 
-模块：邀请与参与｜优先级：P1｜执行条件：待契约确认｜执行记录：未执行
+模块：主题推送与参与｜优先级：P1｜执行条件：可执行｜执行记录：未执行
 
 ## 主题概述与测试目的
 
-验证主题自动推送给所有匹配用户，以 HTTP 响应和后续查询作为判定依据。
+验证自动分发排除跨社区及不匹配用户，以公开 HTTP 响应及后续查询为依据。
 
 ## 独立执行准备
 
@@ -16,10 +16,6 @@
 - 相同身份串行复用前，必须确认上一用例已通过 `DELETE /me` 完成账号注销及清理核查；未清理或清理失败时停止后续用例。不得并行使用相同邮箱/手机号；初态不满足时记录阻塞，不删除来源不明的已有账号。
 - 每次注册成功后立即保存本用例创建的用户 ID、访问令牌和刷新令牌，纳入待清理名单；预期失败的注册若意外成功，也必须保存响应并清理。只处理本次用例实际创建的账号，不删除其他用例或已有用户。
 
-### 本用例附加条件
-
-只通过已有邀请收件 HTTP 查询观察推送。自动推送与可操作 invitation 的映射尚未确认；没有收件记录时不能通过后台造数替代自动推送。
-
 ## 接口调用步骤
 
 ### 步骤 1
@@ -29,7 +25,9 @@ GET {{BASE_URL}}/communities
 Accept: application/json
 ```
 
-响应应为 HTTP 200、code=0。从 data 数组选择两个不同可用社区：保存第一项 id → COMMUNITY_A。保存另一项不同 id → COMMUNITY_B。数量不足则停止并记录阻塞；无社区创建 HTTP 接口，不能继续注册。
+响应应为 HTTP 200、code=0。从 data 数组选择一个可用社区：保存第一项 id → COMMUNITY_A。数量不足则停止并记录阻塞；无社区创建 HTTP 接口，不能继续注册。
+
+从 data 中另选不同可用社区，保存 id → COMMUNITY_B；不足两个社区则阻塞。
 
 ### 步骤 2
 
@@ -85,7 +83,7 @@ Content-Type: application/json
 
 成功后保存 `data.user.id → USER_C`、`data.accessToken → TOKEN_C`、`data.refreshToken → REFRESH_C`；均只在本文件中使用。
 
-### 步骤 5
+### 业务步骤（按顺序执行）
 
 ```http
 POST {{BASE_URL}}/topics
@@ -100,35 +98,32 @@ Content-Type: application/json
 }
 ```
 
-保存 `data.id → T`；检查创建结果后再继续。
-
-### 步骤 6
-
-本用例不调用人工邀请接口。在配置的推送完成 SLA 内轮询下列两个请求。
-
-### 步骤 7
+HTTP 200、code=0，保存 `data.id → T`。
 
 ```http
-GET {{BASE_URL}}/invitations?status=pending&limit=20
+GET {{BASE_URL}}/topics/receipts?status=pending&limit=100
 Accept: application/json
 Authorization: Bearer {{TOKEN_B}}
 ```
 
-### 步骤 8
-
 ```http
-GET {{BASE_URL}}/invitations?status=pending&limit=20
+GET {{BASE_URL}}/topics/receipts?status=pending&limit=100
 Accept: application/json
 Authorization: Bearer {{TOKEN_C}}
 ```
 
+```http
+GET {{BASE_URL}}/topics/receipts?status=pending&limit=100
+Accept: application/json
+Authorization: Bearer {{TOKEN_A}}
+```
+
+轮询 B 收件确认 T 为 pending；C 和 A 的全部收件页均无 T。分发 SLA 未约定则时效验收阻塞。
+
 ## 期待结果
 
-
-- 各步骤先核对其预期再继续；准备请求失败或变量无法取得时停止后续业务步骤并记录阻塞，行为与预期不符时记录失败；结束前仍须清理本用例已创建的全部用户。
-- 仅判定本文件 HTTP 请求可以观察的结果；没有 HTTP 查询能力的内部存储、广播、日志等项目不计为已验证。
-- 按需求七，B 应收到可接受/拒绝的主题推送，C 不应收到。
-- 当前契约未明确主题推送与 推送收件与 invitation 的映射；在契约确认前记录实际结果和阻塞原因，不能擅自把人工邀请成功当作自动推送成功。
+- B 有且仅有一条 T 的 pending 收件；跨社区的 C 没有 T 收件；无需发布者指定接收用户。不同约束排除由 TC-064 验证；仅验证 HTTP 可查询分发结果，不宣称验证外部通知送达。
+- 准备失败或变量缺失时停止后续步骤并记录失败或阻塞；无论结果如何均执行测试后清理。仅验证 HTTP 可观察结果，不推断内部数据行数。
 
 ## 测试后清理（必执行）
 

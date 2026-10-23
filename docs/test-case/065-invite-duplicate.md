@@ -1,10 +1,10 @@
-# TC-065 重复发出邀请保持一条记录
+# TC-065 反复查询不重复生成收件
 
-模块：邀请与参与｜优先级：P1｜执行条件：可执行｜执行记录：未执行
+模块：主题推送与参与｜优先级：P1｜执行条件：可执行｜执行记录：未执行
 
 ## 主题概述与测试目的
 
-验证重复发出邀请保持一条记录，以 HTTP 响应和后续查询作为判定依据。
+验证反复查询不重复生成收件，以公开 HTTP 响应及后续查询为依据。
 
 ## 独立执行准备
 
@@ -66,6 +66,24 @@ Content-Type: application/json
 ### 步骤 4
 
 ```http
+POST {{BASE_URL}}/auth/register
+Accept: application/json
+Content-Type: application/json
+
+{
+  "identityType": "phone",
+  "identityValue": "13900000003",
+  "code": "246810",
+  "nickname": "测试用户C",
+  "communityId": "{{COMMUNITY_A}}"
+}
+```
+
+成功后保存 `data.user.id → USER_C`、`data.accessToken → TOKEN_C`、`data.refreshToken → REFRESH_C`；均只在本文件中使用。
+
+### 业务步骤（按顺序执行）
+
+```http
 POST {{BASE_URL}}/topics
 Accept: application/json
 Authorization: Bearer {{TOKEN_A}}
@@ -78,59 +96,44 @@ Content-Type: application/json
 }
 ```
 
-保存 `data.id → T`；检查创建结果后再继续。
-
-### 步骤 5
+HTTP 200、code=0，保存 `data.id → T`。
 
 ```http
-POST {{BASE_URL}}/topics/{{T}}/invite
-Accept: application/json
-Authorization: Bearer {{TOKEN_A}}
-Content-Type: application/json
-
-{
-  "userId": "{{USER_B}}"
-}
-```
-
-保存 `data.id → I`。
-
-### 步骤 6
-
-```http
-POST {{BASE_URL}}/topics/{{T}}/invite
-Accept: application/json
-Authorization: Bearer {{TOKEN_A}}
-Content-Type: application/json
-
-{
-  "userId": "{{USER_B}}"
-}
-```
-
-### 步骤 7
-
-```http
-GET {{BASE_URL}}/invitations?status=pending&limit=20
+GET {{BASE_URL}}/topics/receipts?status=pending&limit=100
 Accept: application/json
 Authorization: Bearer {{TOKEN_B}}
 ```
 
-### 步骤 8
+```http
+GET {{BASE_URL}}/topics/receipts?status=pending&limit=100
+Accept: application/json
+Authorization: Bearer {{TOKEN_C}}
+```
 
 ```http
-GET {{BASE_URL}}/rooms
+GET {{BASE_URL}}/topics/receipts?status=pending&limit=100
+Accept: application/json
+Authorization: Bearer {{TOKEN_A}}
+```
+
+在测试环境约定的分发 SLA 内轮询并按 nextCursor 翻页，确认 B、C 各有一条 topicId=T、status=pending、roomId=null 的记录，A 没有该主题收件。记录 SLA；未约定时记录时效验收阻塞，超时缺失应有收件则失败。
+
+```http
+GET {{BASE_URL}}/topics/receipts?status=pending&limit=100
+Accept: application/json
+Authorization: Bearer {{TOKEN_B}}
+```
+
+```http
+GET {{BASE_URL}}/topics/receipts?status=pending&limit=100
 Accept: application/json
 Authorization: Bearer {{TOKEN_B}}
 ```
 
 ## 期待结果
 
-
-- 各步骤先核对其预期再继续；准备请求失败或变量无法取得时停止后续业务步骤并记录阻塞，行为与预期不符时记录失败；结束前仍须清理本用例已创建的全部用户。
-- 仅判定本文件 HTTP 请求可以观察的结果；没有 HTTP 查询能力的内部存储、广播、日志等项目不计为已验证。
-- 重试返回同一个邀请 ID，或按已确认规则返回已邀请冲突；最终只有一条 T、USER_B 对应邀请。
-- B 的邀请列表仅出现一次 I，GET /rooms（B）为空；通知投递次数没有公开 HTTP 证据。
+- B 多次查询并遍历所有页，每次 topicId=T 恰好一条，createdAt 保持相同，状态 pending；只能验证查询无重复，不能证明后台分发故障重试。
+- 准备失败或变量缺失时停止后续步骤并记录失败或阻塞；无论结果如何均执行测试后清理。仅验证 HTTP 可观察结果，不推断内部数据行数。
 
 ## 测试后清理（必执行）
 
@@ -142,6 +145,47 @@ Authorization: Bearer {{TOKEN_B}}
 | --- | --- | --- |
 | USER_A | TOKEN_A | REFRESH_A |
 | USER_B | TOKEN_B | REFRESH_B |
+| USER_C | TOKEN_C | REFRESH_C |
+
+### 清理 USER_C
+
+仅在 USER_C 已创建且访问令牌过期时，先调用以下刷新请求；成功后用响应覆盖 TOKEN_C、REFRESH_C。令牌仍有效时直接注销。刷新失败时，仍尝试其他用户的清理，并记录本用户未清理；不能把凭证失效当作账号已删除。
+
+```http
+POST {{BASE_URL}}/auth/refresh
+Accept: application/json
+Content-Type: application/json
+
+{
+  "refreshToken": "{{REFRESH_C}}"
+}
+```
+
+```http
+DELETE {{BASE_URL}}/me
+Accept: application/json
+Authorization: Bearer {{TOKEN_C}}
+```
+
+注销应返回 HTTP 200、`code=0`、`data={}`、非空 `requestId`。随后核查旧访问令牌和刷新令牌均已失效：
+
+```http
+GET {{BASE_URL}}/me
+Accept: application/json
+Authorization: Bearer {{TOKEN_C}}
+```
+
+```http
+POST {{BASE_URL}}/auth/refresh
+Accept: application/json
+Content-Type: application/json
+
+{
+  "refreshToken": "{{REFRESH_C}}"
+}
+```
+
+以上两个核查请求均应返回 HTTP 401、`code=40101`；本用户在用例中通过注册、登录、刷新签发过的其他令牌，也分别使用相同接口核查失效。`/auth/logout` 只撤销刷新会话，不能代替本节的账号注销。
 
 ### 清理 USER_B
 

@@ -1,10 +1,10 @@
-# TC-070 重复拒绝保持最终状态
+# TC-070 过期后已接受用户重试仍成功
 
-模块：邀请与参与｜优先级：P1｜执行条件：可执行｜执行记录：未执行
+模块：主题推送与参与｜优先级：P1｜执行条件：需自然等待过期｜执行记录：未执行
 
 ## 主题概述与测试目的
 
-验证重复拒绝保持最终状态，以 HTTP 响应和后续查询作为判定依据。
+验证过期后已接受用户重试仍成功，以公开 HTTP 响应及后续查询为依据。
 
 ## 独立执行准备
 
@@ -66,6 +66,26 @@ Content-Type: application/json
 ### 步骤 4
 
 ```http
+POST {{BASE_URL}}/auth/register
+Accept: application/json
+Content-Type: application/json
+
+{
+  "identityType": "phone",
+  "identityValue": "13900000003",
+  "code": "246810",
+  "nickname": "测试用户C",
+  "communityId": "{{COMMUNITY_A}}"
+}
+```
+
+成功后保存 `data.user.id → USER_C`、`data.accessToken → TOKEN_C`、`data.refreshToken → REFRESH_C`；均只在本文件中使用。
+
+### 业务步骤（按顺序执行）
+
+客户端计算当前 UTC 时间加 5 分钟，保存 ISO 8601 时间为 EXPIRES。应在此时刻之前完成首次接受；未及时完成则记录前提失败。
+
+```http
 POST {{BASE_URL}}/topics
 Accept: application/json
 Authorization: Bearer {{TOKEN_A}}
@@ -74,66 +94,65 @@ Content-Type: application/json
 {
   "title": "周末公园散步",
   "detail": "公园东门集合，步行一小时。",
-  "genders": []
+  "genders": [],
+  "expiresAt": "{{EXPIRES}}"
 }
 ```
 
-保存 `data.id → T`；检查创建结果后再继续。
-
-### 步骤 5
+HTTP 200、code=0，保存 `data.id → T`。
 
 ```http
-POST {{BASE_URL}}/topics/{{T}}/invite
+GET {{BASE_URL}}/topics/receipts?status=pending&limit=100
+Accept: application/json
+Authorization: Bearer {{TOKEN_B}}
+```
+
+```http
+GET {{BASE_URL}}/topics/receipts?status=pending&limit=100
+Accept: application/json
+Authorization: Bearer {{TOKEN_C}}
+```
+
+```http
+GET {{BASE_URL}}/topics/receipts?status=pending&limit=100
 Accept: application/json
 Authorization: Bearer {{TOKEN_A}}
-Content-Type: application/json
-
-{
-  "userId": "{{USER_B}}"
-}
 ```
 
-保存 `data.id → I`。
-
-### 步骤 6
+在测试环境约定的分发 SLA 内轮询并按 nextCursor 翻页，确认 B、C 各有一条 topicId=T、status=pending、roomId=null 的记录，A 没有该主题收件。记录 SLA；未约定时记录时效验收阻塞，超时缺失应有收件则失败。
 
 ```http
-POST {{BASE_URL}}/invitations/{{I}}/reject
+POST {{BASE_URL}}/topics/{{T}}/accept
 Accept: application/json
 Authorization: Bearer {{TOKEN_B}}
 ```
 
-### 步骤 7
+HTTP 200、code=0，data.topicId=T、status=accepted，保存非空 UUID `data.roomId → ROOM`。
+
+真实等待超过 EXPIRES 后再继续；等待后如访问令牌过期，先使用本文件清理节列出的刷新请求更新 TOKEN_B、REFRESH_B。
 
 ```http
-POST {{BASE_URL}}/invitations/{{I}}/reject
+POST {{BASE_URL}}/topics/{{T}}/accept
 Accept: application/json
 Authorization: Bearer {{TOKEN_B}}
 ```
 
-### 步骤 8
-
 ```http
-POST {{BASE_URL}}/invitations/{{I}}/accept
+GET {{BASE_URL}}/rooms/{{ROOM}}
 Accept: application/json
 Authorization: Bearer {{TOKEN_B}}
 ```
 
-### 步骤 9
-
 ```http
-GET {{BASE_URL}}/rooms
+GET {{BASE_URL}}/topics/receipts?status=accepted&limit=100
 Accept: application/json
 Authorization: Bearer {{TOKEN_B}}
 ```
 
 ## 期待结果
 
-
-- 各步骤先核对其预期再继续；准备请求失败或变量无法取得时停止后续业务步骤并记录阻塞，行为与预期不符时记录失败；结束前仍须清理本用例已创建的全部用户。
-- 仅判定本文件 HTTP 请求可以观察的结果；没有 HTTP 查询能力的内部存储、广播、日志等项目不计为已验证。
-- 重复拒绝和随后接受均不能改变 rejected 终态；返回当前终态或明确状态冲突。
-- B 不加入聊天室，不生成参与记录。
+- 过期后 B 重试 HTTP 200/code=0，仍为 accepted、原 ROOM；成员不增加，收件保持 accepted。
+- 准备失败或变量缺失时停止后续步骤并记录失败或阻塞；无论结果如何均执行测试后清理。仅验证 HTTP 可观察结果，不推断内部数据行数。
 
 ## 测试后清理（必执行）
 
@@ -145,6 +164,47 @@ Authorization: Bearer {{TOKEN_B}}
 | --- | --- | --- |
 | USER_A | TOKEN_A | REFRESH_A |
 | USER_B | TOKEN_B | REFRESH_B |
+| USER_C | TOKEN_C | REFRESH_C |
+
+### 清理 USER_C
+
+仅在 USER_C 已创建且访问令牌过期时，先调用以下刷新请求；成功后用响应覆盖 TOKEN_C、REFRESH_C。令牌仍有效时直接注销。刷新失败时，仍尝试其他用户的清理，并记录本用户未清理；不能把凭证失效当作账号已删除。
+
+```http
+POST {{BASE_URL}}/auth/refresh
+Accept: application/json
+Content-Type: application/json
+
+{
+  "refreshToken": "{{REFRESH_C}}"
+}
+```
+
+```http
+DELETE {{BASE_URL}}/me
+Accept: application/json
+Authorization: Bearer {{TOKEN_C}}
+```
+
+注销应返回 HTTP 200、`code=0`、`data={}`、非空 `requestId`。随后核查旧访问令牌和刷新令牌均已失效：
+
+```http
+GET {{BASE_URL}}/me
+Accept: application/json
+Authorization: Bearer {{TOKEN_C}}
+```
+
+```http
+POST {{BASE_URL}}/auth/refresh
+Accept: application/json
+Content-Type: application/json
+
+{
+  "refreshToken": "{{REFRESH_C}}"
+}
+```
+
+以上两个核查请求均应返回 HTTP 401、`code=40101`；本用户在用例中通过注册、登录、刷新签发过的其他令牌，也分别使用相同接口核查失效。`/auth/logout` 只撤销刷新会话，不能代替本节的账号注销。
 
 ### 清理 USER_B
 

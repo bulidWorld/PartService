@@ -78,6 +78,16 @@ Accept: application/json
 Authorization: Bearer {{TOKEN_A}}
 ```
 
+### 发布时聊天室核查
+
+```http
+GET {{BASE_URL}}/rooms
+Accept: application/json
+Authorization: Bearer {{TOKEN_A}}
+```
+
+房间列表中不应存在 topicId=T 的聊天室。
+
 ## 期待结果
 
 
@@ -85,7 +95,7 @@ Authorization: Bearer {{TOKEN_A}}
 - 仅判定本文件 HTTP 请求可以观察的结果；没有 HTTP 查询能力的内部存储、广播、日志等项目不计为已验证。
 - 所有调用成功；主题的 publisherId=USER_A、communityId=社区 A、status=open，title/detail 与请求一致。
 - genders=[]、minAge/maxAge/expiresAt 无限制；主题流出现一次 T。
-- 通过主题列表与详情核对同一 T；发布者、社区和状态一致。聊天室可立即或在首位接受者加入时创建，本用例不推断内部参与关系。
+- 通过主题列表与详情核对同一 T；发布者、社区和状态一致。发布时不创建聊天室；通过发布者 GET /rooms 核查没有 topicId=T 的房间。首次其他用户接受后才创建聊天室。
 
 ## 测试后清理（必执行）
 
