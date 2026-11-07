@@ -130,17 +130,26 @@ components:
       required:
       - identityType
       - identityValue
-      - code
+      anyOf:
+      - required: [code]
+      - required: [password]
+      description: code 与 password 必须且只能提供一个；identityType 支持 email 或 phone
       properties:
         identityType:
           type: string
+          enum: [email, phone]
           description: 身份类型（email 或 phone）
         identityValue:
           type: string
           description: 身份值
         code:
           type: string
-          description: 业务状态码
+          description: 登录验证码；使用验证码登录时必填
+        password:
+          type: string
+          minLength: 8
+          maxLength: 72
+          description: 登录密码；使用密码登录时必填
         deviceId:
           type: string
           description: 设备标识
@@ -154,11 +163,30 @@ components:
           type: string
           description: 刷新令牌
       description: RefreshRequest字段
+    ChangePasswordRequest:
+      type: object
+      required:
+      - currentPassword
+      - newPassword
+      properties:
+        currentPassword:
+          type: string
+          minLength: 8
+          maxLength: 72
+          description: 当前密码
+        newPassword:
+          type: string
+          minLength: 8
+          maxLength: 72
+          description: 新密码（8 至 72 个字符）
+      additionalProperties: false
+      description: 不包含用户 ID；目标用户由 access token 唯一确定
     RegisterRequest:
       type: object
       required:
       - identityType
       - identityValue
+      - password
       - nickname
       - communityId
       properties:
@@ -171,6 +199,11 @@ components:
         code:
           type: string
           description: 注册验证码；全局配置 register_verify_code 为 true 时必填，为 false 时可省略
+        password:
+          type: string
+          minLength: 8
+          maxLength: 72
+          description: 登录密码（8 至 72 个字符）
         nickname:
           type: string
           maxLength: 32
@@ -306,6 +339,25 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/RefreshRequest'
+        description: 请求参数
+      responses:
+        '200':
+          $ref: '#/components/responses/EmptyResponse'
+  /auth/password:
+    put:
+      tags:
+      - Auth
+      operationId: changePassword
+      summary: 修改当前登录用户的密码
+      description: 用户身份仅从 bearer access token 确定。请求中不接受 userId，服务端必须校验 currentPassword 属于令牌对应用户。
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
         description: 请求参数
       responses:
         '200':

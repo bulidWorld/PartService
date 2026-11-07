@@ -183,26 +183,15 @@ def main():
                 pending.append((f"column-add-{table_name}-{column_name}", item))
             # Existing columns are intentionally retained. XML synchronization
             # only adds missing columns and never deletes user/data columns.
-        # Reinsert restored tables in declaration order and add missing columns
-        # before foreign keys or other statements that depend on them.
+        # Add missing columns before comments, indexes, foreign keys, or raw SQL
+        # can refer to them. Table creation statements are already applied above
+        # this point when a table is new; additions only target existing tables.
         pending_by_id = dict(pending)
         column_additions = [(i, s) for i, s in pending if i.startswith("column-add-")]
-        ordered = []
-        additions_inserted = False
-        raw_statement_ids = {
-            node.attrib["id"]
-            for path in args.dir.glob("*.xml")
-            for node in ET.parse(path).getroot().findall("./statements/statement")
-        }
+        ordered = list(column_additions)
         for ident, sql in statements:
-            if "-foreign-key-" in ident or ident in raw_statement_ids:
-                if not additions_inserted:
-                    ordered.extend(column_additions)
-                    additions_inserted = True
             if ident in pending_by_id:
                 ordered.append((ident, pending_by_id[ident]))
-        if not additions_inserted:
-            ordered.extend(column_additions)
         pending = ordered
         generated = "\n\n".join(f"-- {i}\n{s};" for i, s in pending) + ("\n" if pending else "")
         if args.sql_out:

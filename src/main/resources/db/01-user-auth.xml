@@ -20,6 +20,8 @@
       <columns>
         <column name="id" type="uuid" nullable="true" default="gen_random_uuid()" comment="主键 ID" />
         <column name="nickname" type="varchar(32)" nullable="false" comment="用户昵称" />
+        <column name="password_hash" type="varchar(255)" nullable="true"
+          comment="密码哈希（禁止保存明文；历史账号允许尚未设置密码）" />
         <column name="community_id" type="uuid" nullable="false" comment="所属社区 ID" />
         <column name="gender" type="varchar(16)" nullable="true" comment="性别" />
         <column name="birth_date" type="date" nullable="true" comment="出生日期" />
