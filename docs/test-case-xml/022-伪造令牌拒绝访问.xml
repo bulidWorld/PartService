@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<task name="022-伪造令牌拒绝访问">
+  <parameters>
+    <parameter type="function" valueType="string"><name>bad_token</name><value>generateUUID()</value></parameter>
+  </parameters>
+  <taskStep order="10">
+    <rest method="GET" path="/communities">
+      <auth mode="none"/>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    data = responseBody.get("data")
+    if not isinstance(data, list) or len(data) == 0:
+        raise Blocked("no community available")
+    return statusCode == 200 and responseBody.get("code") == 0 and all(item.get("id") and item.get("name") for item in data) and bool(responseBody.get("requestId"))
+]]></assertionCode>
+      <extractParam valueType="string"><name>c1</name><value>data[0].id</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="20">
+    <compute>
+      <parameter valueType="string"><name>bad_auth</name><value>concat("Bearer ", param("bad_token"))</value></parameter>
+    </compute>
+  </taskStep>
+  <taskStep order="30">
+    <rest method="GET" path="/me">
+      <header><name>Authorization</name><value>{bad_auth}</value></header>
+      <auth mode="header"/>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    return statusCode == 401 and isinstance(responseBody, dict) and responseBody.get("code") == 40101
+]]></assertionCode>
+    </rest>
+  </taskStep>
+  <taskStep order="40">
+    <rest method="GET" path="/topics">
+      <header><name>Authorization</name><value>{bad_auth}</value></header>
+      <auth mode="header"/>
+      <queryParams>
+        <kv valueType="integer"><key>limit</key><value>20</value></kv>
+      </queryParams>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    return statusCode == 401 and isinstance(responseBody, dict) and responseBody.get("code") == 40101
+]]></assertionCode>
+    </rest>
+  </taskStep>
+  <taskStep order="50">
+    <rest method="GET" path="/topics/receipts">
+      <header><name>Authorization</name><value>{bad_auth}</value></header>
+      <auth mode="header"/>
+      <queryParams>
+        <kv valueType="integer"><key>limit</key><value>20</value></kv>
+      </queryParams>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    return statusCode == 401 and isinstance(responseBody, dict) and responseBody.get("code") == 40101
+]]></assertionCode>
+    </rest>
+  </taskStep>
+  <taskStep order="60">
+    <rest method="GET" path="/rooms">
+      <header><name>Authorization</name><value>{bad_auth}</value></header>
+      <auth mode="header"/>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    return statusCode == 401 and isinstance(responseBody, dict) and responseBody.get("code") == 40101
+]]></assertionCode>
+    </rest>
+  </taskStep>
+  <taskStep order="70">
+    <rest method="GET" path="/me/rating-summary">
+      <header><name>Authorization</name><value>{bad_auth}</value></header>
+      <auth mode="header"/>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    return statusCode == 401 and isinstance(responseBody, dict) and responseBody.get("code") == 40101
+]]></assertionCode>
+    </rest>
+  </taskStep>
+</task>

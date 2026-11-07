@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<task name="099-收件状态非法">
+  <parameters>
+    <parameter type="function" valueType="string"><name>run</name><value>generateUUID()</value></parameter>
+    <parameter type="fixed" valueType="string"><name>code</name><value>123456</value></parameter>
+  </parameters>
+  <taskStep order="10">
+    <rest method="GET" path="/communities">
+      <auth mode="none"/>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    data = responseBody.get("data")
+    if not isinstance(data, list) or len(data) == 0:
+        raise Blocked("no community available")
+    return statusCode == 200 and responseBody.get("code") == 0 and all(isinstance(item, dict) and item.get("id") and item.get("name") for item in data) and bool(responseBody.get("requestId"))
+]]></assertionCode>
+      <extractParam valueType="string"><name>c1</name><value>data[0].id</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="20">
+    <compute>
+      <parameter valueType="string"><name>a_email</name><value>concat("tc-", param("run"), "-a@example.com")</value></parameter>
+    </compute>
+  </taskStep>
+  <taskStep order="30">
+    <rest method="POST" path="/auth/register">
+      <header><name>Content-Type</name><value>application/json</value></header>
+      <auth mode="none"/>
+      <body>
+        <kv><key>identityType</key><value>email</value></kv>
+        <kv><key>identityValue</key><parameter>a_email</parameter></kv>
+        <kv><key>code</key><parameter>code</parameter></kv>
+        <kv><key>nickname</key><value>测099甲</value></kv>
+        <kv><key>communityId</key><parameter>c1</parameter></kv>
+      </body>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    data = responseBody.get("data") or {}
+    return statusCode == 200 and responseBody.get("code") == 0 and bool(data.get("user", {}).get("id")) and bool(data.get("accessToken")) and bool(data.get("refreshToken")) and bool(responseBody.get("requestId"))
+]]></assertionCode>
+      <extractParam valueType="string"><name>a_id</name><value>data.user.id</value></extractParam>
+      <extractParam valueType="string"><name>a_access</name><value>data.accessToken</value></extractParam>
+      <extractParam valueType="string"><name>a_refresh</name><value>data.refreshToken</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="40">
+    <rest method="GET" path="/topics/receipts">
+      <auth mode="bearer" parameter="a_access"/>
+      <queryParams>
+        <kv><key>status</key><value>unknown</value></kv>
+        <kv valueType="integer"><key>limit</key><value>20</value></kv>
+      </queryParams>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    message = responseBody.get("message")
+    return statusCode == 400 and responseBody.get("code") == 40001 and isinstance(message, str) and "Exception" not in message and "SQL" not in message and bool(responseBody.get("requestId"))
+]]></assertionCode>
+    </rest>
+  </taskStep>
+  <finally>
+    <taskStep order="10" ifParameter="a_access">
+      <rest method="DELETE" path="/me">
+        <auth mode="bearer" parameter="a_access"/>
+        <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    return statusCode == 200 and responseBody.get("code") == 0 and responseBody.get("data") == {} and bool(responseBody.get("requestId"))
+]]></assertionCode>
+      </rest>
+    </taskStep>
+    <taskStep order="20" ifParameter="a_access">
+      <rest method="GET" path="/me">
+        <auth mode="bearer" parameter="a_access"/>
+        <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    return statusCode == 401 and responseBody is not None and responseBody.get("code") == 40101
+]]></assertionCode>
+      </rest>
+    </taskStep>
+  </finally>
+</task>

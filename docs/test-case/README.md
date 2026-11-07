@@ -1,211 +1,129 @@
-# 接口业务测试用例
+# 测试用例索引
 
-共 **142 个编号场景**，每个文件独立描述自己的前提、HTTP 数据准备、请求参数、预期及执行记录；数字只表示序号，无文件执行依赖。
+依据 [demo.md](demo.md) 生成 106 个独立 Markdown 用例。每个文件包含自己的 HTTP 建数、参数、变量提取、结果断言和 finally 注销流程。仅生成说明文档，尚未连接服务执行。
 
-**所有测试操作与核查仅使用公开 HTTP 接口。** 已移除 SQL、后台造数、直查数据、日志文件读取、服务重启及故障注入步骤。无法通过现有 HTTP 完成的场景保留编号并明确记录阻塞；部分可验证的场景不宣称内部状态已通过验收。
+接口字段以 `src/main/resources/rest-api/*.yaml` 和当前序列化模型为准；业务断言来自 `docs/requirements` 与 `docs/rest-api.md`。当前 JSON 是 camelCase，旧 REST 概述中的 snake_case 请求不能直接照抄。评价汇总自身定义的 snake_case 保留。
 
-旧邀请场景已替换为主题推送、收件与接受场景；保留原编号和文件名以维持已有链接。接受请求无请求体，身份取自访问令牌，返回 `topicId/status/roomId/readAt/createdAt`。
+空社区字典或需要两社区而数量不足时，相关用例阻塞；不能在用例中写死社区 ID 或 SQL 插入字典。测试数据均从本文件创建，不引用其他用例。所有随机注册都登记后通过 DELETE /me 注销；聊天室保留断言完成后才允许按本例响应 ID 定向清理历史。
 
-## 执行方式
+## 用例列表
 
-1. 使用已运行、无用户及业务数据的独立测试环境，填写文件内 BASE_URL。允许已有可查询的基础字典；用例本身不部署、清库或重置环境。
-2. 从该文件 GET /communities 响应选取 COMMUNITY_A；跨社区场景还需另一个 COMMUNITY_B。若社区不足，直接阻塞。当前没有创建社区的 HTTP 接口，不能补写数据或用固定 UUID 绕过。
-3. 涉及分类时，由该文件 GET /rating-categories 确认所需编码；用户、主题、消息和评价均由同一文件的 HTTP 请求创建；主题收件由发布自动触发生成。
-4. 按顺序执行请求，替换本文件取得的变量并核查后续 HTTP 查询结果。每次注册成功立即记录用户 ID 和令牌；预期失败的注册若意外成功，也纳入清理名单。
-5. 无论通过、失败或中途阻塞，均执行文件内“测试后清理”：逐个使用本次创建用户自己的访问令牌调用 `DELETE /me`，再核查旧访问/刷新令牌失效。清理失败仍尝试其他用户，并记录逐用户清理结果；全部清理确认成功后才允许复用环境或执行下一用例。退出登录 `/auth/logout` 不能代替账号注销。
-6. 冷却、过期和令牌有效期通过真实时间等待。缺少接口的场景记录阻塞，不使用后台、运维或数据库手段替代。
-
-编号文件是 Markdown 手工验收用例，尚未调用实际服务执行。静态检查只验证文档结构、变量、路径、参数与链接。
-
-## 契约及执行边界
-
-- HTTP 路径与请求字段以 src/main/resources/rest-api/*.yaml 的 28 个操作为准，业务语义参照 docs/requirements/；没有臆造初始化或测试管理接口。
-- 响应统一字段为 code/message/data/requestId；分页为 items/nextCursor/hasMore。验证码发送响应和评价摘要保留 YAML 明确的 snake_case 字段。
-- 常用错误预期为 400/40001、401/40101、403/40301、404/40401、409/40901、429/42901；尚未统一的错误语义在具体用例中注明。
-- 所有会成功创建用户的 118 个编号用例均包含独立的注销、令牌失效核查及清理结果记录；TC-018 补存注册凭证，TC-136 仅发送非法 JSON，不应创建用户。相同邮箱/手机号仅在前一用例清理成功后串行复用，不能并行注册同一身份。
-- `DELETE /me` 无请求体，只注销令牌对应的当前用户，并在同一事务中删除账号、身份、全部会话和关联业务数据，释放注册身份；注销失败时整体回滚。不能对来源不明或其他用例的账号执行清理。
-- 有效邮箱统一为 782213745@qq.com，验证码示例为数字字符串 246810。按现有约定不改验证码开关；源码登录仍校验验证码的差异需记录，不能通过后台绕过。
-- 完全空库且社区字典也为空时，TC-001 可验证空列表；注册链路因没有社区创建 HTTP 接口而阻塞。已有社区字典时可以执行其余前提满足的场景，不能同时声称完全空社区初态成立。
-- TC-032、TC-056、TC-075 必须在各自注册后真实等待七天；不会借用其他文件的老用户。
-- 停用社区、封禁、停用分类、算法控制、日志审计、重启和中途失败缺少公开 HTTP 入口，相关场景明确阻塞。主题已读可由收件列表的 readAt 核查；聊天室已读是否可查仍以对应接口字段为准。
-- 外部通知送达、单侧年龄、匿名、申诉、附件规则等缺口保留待确认说明；未满足的前提不能算通过。
-
-## 用例索引
-
-| 编号 | 文件与场景 | 模块 | 优先级 | 执行条件 |
-| --- | --- | --- | --- | --- |
-| TC-001 | [完全空库时查询社区](001-empty-communities.md) | 账号与用户 | P1 | 可执行 |
-| TC-002 | [发送邮箱注册验证码](002-email-code.md) | 账号与用户 | P0 | 可执行 |
-| TC-003 | [身份类型不支持](003-invalid-identity-type.md) | 账号与用户 | P1 | 可执行 |
-| TC-004 | [邮箱格式错误](004-invalid-email.md) | 账号与用户 | P1 | 可执行 |
-| TC-005 | [验证码用途不支持](005-invalid-code-purpose.md) | 账号与用户 | P1 | 可执行 |
-| TC-006 | [验证码发送频率限制](006-send-code-rate-limit.md) | 账号与用户 | P1 | 可执行 |
-| TC-007 | [邮箱最小资料注册](007-email-register.md) | 账号与用户 | P0 | 可执行 |
-| TC-008 | [手机号最小资料注册](008-phone-register.md) | 账号与用户 | P1 | 可执行 |
-| TC-009 | [注册缺少昵称](009-register-missing-nickname.md) | 账号与用户 | P1 | 可执行 |
-| TC-010 | [注册昵称全空白](010-register-blank-nickname.md) | 账号与用户 | P1 | 可执行 |
-| TC-011 | [注册缺少社区](011-register-missing-community.md) | 账号与用户 | P1 | 可执行 |
-| TC-012 | [注册社区 UUID 格式错误](012-register-invalid-community-uuid.md) | 账号与用户 | P1 | 可执行 |
-| TC-013 | [注册社区不存在](013-register-unknown-community.md) | 账号与用户 | P1 | 可执行 |
-| TC-014 | [注册昵称超过 32 字符](014-register-long-nickname.md) | 账号与用户 | P1 | 可执行 |
-| TC-015 | [注册昵称恰好 32 字符](015-register-nickname-boundary.md) | 账号与用户 | P1 | 可执行 |
-| TC-016 | [重复身份注册不创建第二个用户](016-register-duplicate-identity.md) | 账号与用户 | P0 | 可执行 |
-| TC-017 | [不同身份允许昵称相同](017-duplicate-nickname.md) | 账号与用户 | P1 | 可执行 |
-| TC-018 | [关闭注册验证码时省略 code](018-register-no-code.md) | 账号与用户 | P1 | 可执行 |
-| TC-019 | [已注册邮箱登录](019-login-email.md) | 账号与用户 | P0 | 可执行 |
-| TC-020 | [未注册邮箱不能登录](020-login-unregistered.md) | 账号与用户 | P1 | 可执行 |
-| TC-021 | [有效刷新令牌续期](021-refresh-token.md) | 账号与用户 | P0 | 可执行 |
-| TC-022 | [伪造刷新令牌](022-invalid-refresh-token.md) | 账号与用户 | P1 | 可执行 |
-| TC-023 | [注销后刷新令牌失效](023-logout-revokes-refresh.md) | 账号与用户 | P0 | 可执行 |
-| TC-024 | [禁止撤销其他用户的刷新会话](024-logout-other-user.md) | 账号与用户 | P1 | 可执行 |
-| TC-025 | [修改并持久化个人资料](025-profile-update.md) | 账号与用户 | P1 | 可执行 |
-| TC-026 | [只修改昵称保留其他资料](026-profile-partial.md) | 账号与用户 | P1 | 可执行 |
-| TC-027 | [资料拒绝未知性别](027-profile-invalid-gender.md) | 账号与用户 | P1 | 可执行 |
-| TC-028 | [资料拒绝未来出生日期](028-profile-future-birth.md) | 账号与用户 | P1 | 可执行 |
-| TC-029 | [资料拒绝空白昵称](029-profile-blank-nickname.md) | 账号与用户 | P1 | 可执行 |
-| TC-030 | [头像拒绝非受控附件地址](030-profile-invalid-avatar.md) | 账号与用户 | P1 | 待附件规则确认 |
-| TC-031 | [注册后七天内不能切换社区](031-community-cooldown.md) | 账号与用户 | P1 | 可执行 |
-| TC-032 | [超过七天后切换并重新开始冷却](032-community-after-seven-days.md) | 账号与用户 | P1 | 需真实等待 7 天 |
-| TC-033 | [不能切换到停用社区](033-community-inactive.md) | 账号与用户 | P1 | 阻塞：缺少 HTTP 接口 |
-| TC-034 | [封禁账号不能执行受保护业务](034-banned-user.md) | 账号与用户 | P1 | 阻塞：缺少 HTTP 接口 |
-| TC-035 | [发布无条件主题并查询详情](035-topic-create.md) | 主题 | P0 | 可执行 |
-| TC-036 | [发布主题缺少标题](036-topic-missing-title.md) | 主题 | P1 | 可执行 |
-| TC-037 | [发布主题标题全空白](037-topic-blank-title.md) | 主题 | P1 | 可执行 |
-| TC-038 | [发布主题缺少详情](038-topic-missing-detail.md) | 主题 | P1 | 可执行 |
-| TC-039 | [发布主题详情全空白](039-topic-blank-detail.md) | 主题 | P1 | 可执行 |
-| TC-040 | [发布主题标题超过 80 字符](040-topic-title-too-long.md) | 主题 | P1 | 可执行 |
-| TC-041 | [发布主题最小年龄大于最大年龄](041-topic-reversed-age.md) | 主题 | P1 | 可执行 |
-| TC-042 | [主题性别约束非法](042-topic-unknown-gender.md) | 主题 | P1 | 可执行 |
-| TC-043 | [主题过期时间格式错误](043-topic-invalid-expiry.md) | 主题 | P1 | 可执行 |
-| TC-044 | [主题标题恰好 80 字符](044-topic-title-boundary.md) | 主题 | P1 | 可执行 |
-| TC-045 | [主题年龄上下限均可匹配](045-topic-age-boundary.md) | 主题 | P1 | 可执行 |
-| TC-046 | [缺少出生日期不匹配年龄主题](046-topic-missing-age.md) | 主题 | P1 | 可执行 |
-| TC-047 | [仅性别限制不要求出生日期](047-topic-gender-only.md) | 主题 | P1 | 可执行 |
-| TC-048 | [性别不满足主题约束](048-topic-gender-mismatch.md) | 主题 | P1 | 可执行 |
-| TC-049 | [跨社区主题列表和详情隔离](049-topic-cross-community.md) | 主题 | P0 | 可执行 |
-| TC-050 | [发布者修改主题](050-topic-update-owner.md) | 主题 | P1 | 可执行 |
-| TC-051 | [非发布者不能修改主题](051-topic-forbidden-update.md) | 主题 | P1 | 可执行 |
-| TC-052 | [非发布者不能关闭主题](052-topic-forbidden-close.md) | 主题 | P1 | 可执行 |
-| TC-053 | [关闭主题并重复关闭](053-topic-close.md) | 主题 | P1 | 可执行 |
-| TC-054 | [主题流默认只包含开放主题](054-topic-default-open-feed.md) | 主题 | P1 | 可执行 |
-| TC-055 | [到达过期时间后不能新增参与](055-topic-expiration.md) | 主题 | P1 | 需自然等待过期 |
-| TC-056 | [切换社区不改变已发布主题归属](056-topic-community-snapshot.md) | 主题 | P1 | 需真实等待 7 天 |
-| TC-057 | [主题流游标分页不重复不遗漏](057-topic-pagination.md) | 主题 | P1 | 可执行 |
-| TC-058 | [仅提供一个年龄边界的规则确认](058-topic-single-age-bound.md) | 主题 | P1 | 待规则确认 |
-| TC-059 | [发布后自动生成主题收件](059-invite-create.md) | 主题推送与参与 | P0 | 可执行 |
-| TC-060 | [首次接受前不创建聊天室](060-invite-non-owner.md) | 主题推送与参与 | P1 | 可执行 |
-| TC-061 | [发布者不能接受自己的主题](061-invite-self.md) | 主题推送与参与 | P1 | 可执行 |
-| TC-062 | [跨社区用户不收到且不能接受主题](062-invite-other-community.md) | 主题推送与参与 | P1 | 可执行 |
-| TC-063 | [接受不存在的主题](063-invite-unknown-user.md) | 主题推送与参与 | P1 | 可执行 |
-| TC-064 | [不匹配用户不收到且不能接受主题](064-invite-mismatch.md) | 主题推送与参与 | P1 | 可执行 |
-| TC-065 | [反复查询不重复生成收件](065-invite-duplicate.md) | 主题推送与参与 | P1 | 可执行 |
-| TC-066 | [关闭使未接受收件失效](066-invite-closed-topic.md) | 主题推送与参与 | P1 | 可执行 |
-| TC-067 | [首次接受创建聊天室并加入双方](067-invitation-accept.md) | 主题推送与参与 | P0 | 可执行 |
-| TC-068 | [忽略主题不产生参与关系](068-invitation-reject.md) | 主题推送与参与 | P1 | 可执行 |
-| TC-069 | [重复接受返回同一聊天室](069-invitation-accept-retry.md) | 主题推送与参与 | P0 | 可执行 |
-| TC-070 | [过期后已接受用户重试仍成功](070-invitation-reject-retry.md) | 主题推送与参与 | P1 | 需自然等待过期 |
-| TC-071 | [主题收件已读持久化与幂等](071-invitation-accepted-reject.md) | 主题推送与参与 | P1 | 可执行 |
-| TC-072 | [接受身份由当前令牌确定](072-invitation-forged-actor.md) | 主题推送与参与 | P0 | 可执行 |
-| TC-073 | [关闭后不能新增接受者](073-invitation-accept-closed.md) | 主题推送与参与 | P1 | 可执行 |
-| TC-074 | [接受时重新校验用户资料](074-invitation-recheck-profile.md) | 主题推送与参与 | P1 | 可执行 |
-| TC-075 | [接受时重新校验社区归属](075-invitation-recheck-community.md) | 主题推送与参与 | P1 | 需真实等待 7 天 |
-| TC-076 | [主题收件按用户与状态隔离](076-invitations-isolation.md) | 主题推送与参与 | P1 | 可执行 |
-| TC-077 | [主题收件游标分页无重复遗漏](077-invitations-pagination.md) | 主题推送与参与 | P1 | 可执行 |
-| TC-078 | [多用户并发首次接受共享聊天室](078-invitation-concurrent-accept.md) | 主题推送与参与 | P1 | 可执行 |
-| TC-079 | [自动分发排除跨社区及不匹配用户](079-topic-automatic-distribution.md) | 主题推送与参与 | P1 | 可执行 |
-| TC-080 | [成员发送并读取文本消息](080-chat-send.md) | 聊天 | P0 | 可执行 |
-| TC-081 | [同一客户端消息 ID 重试幂等](081-chat-message-retry.md) | 聊天 | P0 | 可执行 |
-| TC-082 | [不同发送者可以使用相同客户端消息 ID](082-chat-two-senders.md) | 聊天 | P1 | 可执行 |
-| TC-083 | [不能发送空文本](083-chat-empty-text.md) | 聊天 | P1 | 可执行 |
-| TC-084 | [不能发送全空白文本](084-chat-blank-text.md) | 聊天 | P1 | 可执行 |
-| TC-085 | [不能发送未知消息类型](085-chat-unknown-type.md) | 聊天 | P1 | 可执行 |
-| TC-086 | [客户端消息 ID 超过 64 字符](086-chat-long-client-id.md) | 聊天 | P1 | 可执行 |
-| TC-087 | [客户端消息 ID 恰好 64 字符](087-chat-client-id-boundary.md) | 聊天 | P1 | 可执行 |
-| TC-088 | [非成员不能读取聊天室详情](088-chat-outsider-detail.md) | 聊天 | P0 | 可执行 |
-| TC-089 | [非成员不能读取消息](089-chat-outsider-history.md) | 聊天 | P0 | 可执行 |
-| TC-090 | [非成员不能发送消息](090-chat-outsider-send.md) | 聊天 | P0 | 可执行 |
-| TC-091 | [非成员不能标记已读](091-chat-outsider-read.md) | 聊天 | P0 | 可执行 |
-| TC-092 | [非成员不能撤回消息](092-chat-outsider-recall.md) | 聊天 | P0 | 可执行 |
-| TC-093 | [成员标记已读并持久化](093-chat-read-position.md) | 聊天 | P1 | 部分可验证 |
-| TC-094 | [只能撤回自己发送的消息](094-chat-recall-self.md) | 聊天 | P1 | 可执行 |
-| TC-095 | [重复撤回不重复修改历史](095-chat-recall-idempotent.md) | 聊天 | P1 | 可执行 |
-| TC-096 | [撤回时校验消息所属房间](096-chat-wrong-room-recall.md) | 聊天 | P0 | 可执行 |
-| TC-097 | [已读消息必须属于当前房间](097-chat-wrong-room-read.md) | 聊天 | P1 | 可执行 |
-| TC-098 | [主题关闭后原成员继续聊天](098-chat-closed-topic.md) | 聊天 | P1 | 可执行 |
-| TC-099 | [消息历史按 before 游标分页](099-chat-pagination.md) | 聊天 | P1 | 可执行 |
-| TC-100 | [聊天拒绝非受控图片地址](100-chat-untrusted-image.md) | 聊天 | P1 | 待附件规则确认 |
-| TC-101 | [共同参与者提交好评](101-rating-good.md) | 评价 | P0 | 可执行 |
-| TC-102 | [共同参与者提交中评](102-rating-neutral.md) | 评价 | P1 | 可执行 |
-| TC-103 | [共同参与者提交差评](103-rating-bad.md) | 评价 | P1 | 可执行 |
-| TC-104 | [评分以外的分类和评论可省略](104-rating-minimal.md) | 评价 | P1 | 可执行 |
-| TC-105 | [不能评价自己](105-rating-self.md) | 评价 | P1 | 可执行 |
-| TC-106 | [未接受主题不能评价](106-rating-unaccepted.md) | 评价 | P0 | 可执行 |
-| TC-107 | [共同参与其他主题不能跨主题评价](107-rating-cross-topic.md) | 评价 | P1 | 可执行 |
-| TC-108 | [同主题同方向评价只保存一次](108-rating-duplicate.md) | 评价 | P0 | 可执行 |
-| TC-109 | [双方可以分别互评](109-rating-mutual.md) | 评价 | P1 | 可执行 |
-| TC-110 | [拒绝未知评分](110-rating-invalid-score.md) | 评价 | P1 | 可执行 |
-| TC-111 | [拒绝未知评价分类](111-rating-invalid-category.md) | 评价 | P1 | 可执行 |
-| TC-112 | [评价评论超过 500 字符](112-rating-comment-too-long.md) | 评价 | P1 | 可执行 |
-| TC-113 | [评价评论恰好 500 字符](113-rating-comment-boundary.md) | 评价 | P1 | 可执行 |
-| TC-114 | [客户端缓存的停用评价分类被拒绝](114-rating-disabled-category.md) | 评价 | P1 | 阻塞：缺少 HTTP 接口 |
-| TC-115 | [无评价时汇总为空样本](115-rating-empty-summary.md) | 评价 | P1 | 可执行 |
-| TC-116 | [评价数量与好差评率统计](116-rating-summary-counts.md) | 评价 | P0 | 可执行 |
-| TC-117 | [用户公开评价游标分页](117-rating-pagination.md) | 评价 | P1 | 可执行 |
-| TC-118 | [公开评价不泄露联系方式和凭证](118-rating-public-privacy.md) | 评价 | P1 | 可执行 |
-| TC-119 | [并发提交评价只计数一次](119-rating-concurrent.md) | 评价 | P1 | 可执行 |
-| TC-120 | [匿名评价契约缺口](120-rating-anonymous.md) | 评价 | P1 | 待契约确认 |
-| TC-121 | [评价申诉契约缺口](121-rating-appeal.md) | 评价 | P1 | 待契约确认 |
-| TC-122 | [少量评价不能触发系统评级](122-risk-insufficient-samples.md) | 系统评级 | P1 | 待算法规则确认 |
-| TC-123 | [达到配置阈值生成系统评级](123-risk-threshold.md) | 系统评级 | P1 | 阻塞：缺少 HTTP 接口 |
-| TC-124 | [相同样本重复计算不增加计数和评级](124-risk-recompute.md) | 系统评级 | P1 | 阻塞：缺少 HTTP 接口 |
-| TC-125 | [滚动窗口排除窗口外样本](125-risk-window.md) | 系统评级 | P1 | 阻塞：缺少 HTTP 接口 |
-| TC-126 | [异步统计失败后重试补偿](126-risk-recovery.md) | 系统评级 | P1 | 阻塞：缺少 HTTP 接口 |
-| TC-127 | [算法版本变更可追溯](127-risk-algorithm-version.md) | 系统评级 | P1 | 阻塞：缺少 HTTP 接口 |
-| TC-128 | [不再满足条件时移除系统评级](128-risk-tag-removal.md) | 系统评级 | P1 | 阻塞：缺少 HTTP 接口 |
-| TC-129 | [系统评级对其他用户可见](129-risk-public-visibility.md) | 系统评级 | P1 | 阻塞：缺少 HTTP 接口 |
-| TC-130 | [受保护接口缺少访问令牌](130-auth-missing.md) | 通用 | P0 | 可执行 |
-| TC-131 | [受保护接口伪造访问令牌](131-auth-forged.md) | 通用 | P0 | 可执行 |
-| TC-132 | [访问令牌到期后只能刷新续期](132-auth-expired.md) | 通用 | P1 | 需自然等待令牌过期 |
-| TC-133 | [分页 limit=0 被拒绝](133-pagination-limit-0.md) | 通用 | P1 | 可执行 |
-| TC-134 | [分页 limit=101 被拒绝](134-pagination-limit-101.md) | 通用 | P1 | 可执行 |
-| TC-135 | [分页拒绝无效游标](135-pagination-invalid-cursor.md) | 通用 | P1 | 可执行 |
-| TC-136 | [JSON 解析错误统一返回参数错误](136-request-invalid-json.md) | 通用 | P1 | 可执行 |
-| TC-137 | [资源 ID 非 UUID 返回参数错误](137-request-invalid-path-id.md) | 通用 | P1 | 可执行 |
-| TC-138 | [请求链路 ID 自动生成和透传](138-request-id.md) | 通用 | P1 | 可执行 |
-| TC-139 | [完整业务链路审计与敏感信息脱敏](139-audit-log-redaction.md) | 通用 | P1 | 阻塞：缺少 HTTP 接口 |
-| TC-140 | [服务重启后用户主题成员消息评价仍存在](140-persistence-restart.md) | 通用 | P0 | 阻塞：缺少 HTTP 接口 |
-| TC-141 | [接受主题写入故障时整体回滚](141-transaction-accept-rollback.md) | 通用 | P1 | 阻塞：缺少 HTTP 接口 |
-| TC-142 | [注册到参与聊天互评完整链路](142-e2e.md) | 端到端 | P0 | 可执行 |
-
-## 28 个 HTTP 操作覆盖
-
-| 方法与路径 | operationId | 用例示例 |
+| 编号 | 范围 | 文件 |
 | --- | --- | --- |
-| `POST /auth/send-code` | `sendCode` | [TC-002](002-email-code.md)、[TC-003](003-invalid-identity-type.md)、[TC-004](004-invalid-email.md)、[TC-005](005-invalid-code-purpose.md) |
-| `POST /auth/register` | `register` | [TC-007](007-email-register.md)、[TC-008](008-phone-register.md)、[TC-009](009-register-missing-nickname.md)、[TC-010](010-register-blank-nickname.md) |
-| `POST /auth/login` | `login` | [TC-019](019-login-email.md)、[TC-020](020-login-unregistered.md) |
-| `POST /auth/refresh` | `refresh` | [TC-021](021-refresh-token.md)、[TC-022](022-invalid-refresh-token.md)、[TC-023](023-logout-revokes-refresh.md)、[TC-024](024-logout-other-user.md) |
-| `POST /auth/logout` | `logout` | [TC-023](023-logout-revokes-refresh.md)、[TC-024](024-logout-other-user.md) |
-| `GET /me/rating-summary` | `getMyRatingSummary` | [TC-106](106-rating-unaccepted.md)、[TC-115](115-rating-empty-summary.md)、[TC-116](116-rating-summary-counts.md)、[TC-119](119-rating-concurrent.md) |
-| `POST /topics/{topicId}/ratings` | `rateTopicParticipant` | [TC-101](101-rating-good.md)、[TC-102](102-rating-neutral.md)、[TC-103](103-rating-bad.md)、[TC-104](104-rating-minimal.md) |
-| `GET /rating-categories` | `listRatingCategories` | [TC-101](101-rating-good.md)、[TC-102](102-rating-neutral.md)、[TC-103](103-rating-bad.md)、[TC-105](105-rating-self.md) |
-| `GET /users/{userId}/ratings` | `listUserRatings` | [TC-101](101-rating-good.md)、[TC-106](106-rating-unaccepted.md)、[TC-108](108-rating-duplicate.md)、[TC-109](109-rating-mutual.md) |
-| `GET /rooms` | `listRooms` | [TC-036](036-topic-missing-title.md)、[TC-037](037-topic-blank-title.md)、[TC-038](038-topic-missing-detail.md)、[TC-039](039-topic-blank-detail.md) |
-| `GET /rooms/{roomId}` | `getRoom` | [TC-067](067-invitation-accept.md)、[TC-069](069-invitation-accept-retry.md)、[TC-073](073-invitation-accept-closed.md)、[TC-078](078-invitation-concurrent-accept.md) |
-| `GET /rooms/{roomId}/messages` | `listMessages` | [TC-080](080-chat-send.md)、[TC-081](081-chat-message-retry.md)、[TC-082](082-chat-two-senders.md)、[TC-083](083-chat-empty-text.md) |
-| `POST /rooms/{roomId}/messages` | `sendMessage` | [TC-080](080-chat-send.md)、[TC-081](081-chat-message-retry.md)、[TC-082](082-chat-two-senders.md)、[TC-083](083-chat-empty-text.md) |
-| `POST /rooms/{roomId}/read` | `markRoomRead` | [TC-091](091-chat-outsider-read.md)、[TC-093](093-chat-read-position.md)、[TC-097](097-chat-wrong-room-read.md)、[TC-142](142-e2e.md) |
-| `POST /rooms/{roomId}/messages/{messageId}/recall` | `recallMessage` | [TC-092](092-chat-outsider-recall.md)、[TC-094](094-chat-recall-self.md)、[TC-095](095-chat-recall-idempotent.md)、[TC-096](096-chat-wrong-room-recall.md) |
-| `GET /topics/receipts` | `listTopicReceipts` | [TC-059](059-invite-create.md)、[TC-071](071-invitation-accepted-reject.md)、[TC-076](076-invitations-isolation.md)、[TC-077](077-invitations-pagination.md) |
-| `POST /topics/{topicId}/accept` | `acceptTopic` | [TC-067](067-invitation-accept.md)、[TC-069](069-invitation-accept-retry.md)、[TC-070](070-invitation-reject-retry.md)、[TC-078](078-invitation-concurrent-accept.md) |
-| `POST /topics/{topicId}/read` | `readTopic` | [TC-068](068-invitation-reject.md)、[TC-071](071-invitation-accepted-reject.md) |
-| `GET /topics` | `listTopics` | [TC-035](035-topic-create.md)、[TC-036](036-topic-missing-title.md)、[TC-037](037-topic-blank-title.md)、[TC-038](038-topic-missing-detail.md) |
-| `POST /topics` | `createTopic` | [TC-035](035-topic-create.md)、[TC-036](036-topic-missing-title.md)、[TC-037](037-topic-blank-title.md)、[TC-038](038-topic-missing-detail.md) |
-| `GET /topics/{topicId}` | `getTopic` | [TC-035](035-topic-create.md)、[TC-049](049-topic-cross-community.md)、[TC-050](050-topic-update-owner.md)、[TC-051](051-topic-forbidden-update.md) |
-| `PATCH /topics/{topicId}` | `updateTopic` | [TC-050](050-topic-update-owner.md)、[TC-051](051-topic-forbidden-update.md) |
-| `POST /topics/{topicId}/close` | `closeTopic` | [TC-052](052-topic-forbidden-close.md)、[TC-053](053-topic-close.md)、[TC-054](054-topic-default-open-feed.md)、[TC-066](066-invite-closed-topic.md) |
-| `DELETE /me` | `deleteCurrentUser` | 所有创建用户的用例的“测试后清理”，如 [TC-007](007-email-register.md)、[TC-017](017-duplicate-nickname.md)、[TC-142](142-e2e.md) |
-| `GET /me` | `getCurrentUser` | [TC-007](007-email-register.md)、[TC-008](008-phone-register.md)、[TC-009](009-register-missing-nickname.md)、[TC-010](010-register-blank-nickname.md) |
-| `PATCH /me` | `updateCurrentUser` | [TC-025](025-profile-update.md)、[TC-026](026-profile-partial.md)、[TC-027](027-profile-invalid-gender.md)、[TC-028](028-profile-future-birth.md) |
-| `PATCH /me/community` | `changeCommunity` | [TC-031](031-community-cooldown.md)、[TC-032](032-community-after-seven-days.md)、[TC-056](056-topic-community-snapshot.md)、[TC-075](075-invitation-recheck-community.md) |
-| `GET /communities` | `listCommunities` | [TC-001](001-empty-communities.md)、[TC-007](007-email-register.md)、[TC-008](008-phone-register.md)、[TC-009](009-register-missing-nickname.md) |
+| 001 | 基础字典 | [社区与评价分类字典](001-社区与评价分类字典.md) |
+| 002 | 账号 | [邮箱注册及可选资料为空](002-邮箱注册及可选资料为空.md) |
+| 003 | 注册校验 | [注册缺少昵称](003-注册缺少昵称.md) |
+| 004 | 注册校验 | [注册空白昵称](004-注册空白昵称.md) |
+| 005 | 注册校验 | [注册昵称超长](005-注册昵称超长.md) |
+| 006 | 注册校验 | [注册缺少社区](006-注册缺少社区.md) |
+| 007 | 注册校验 | [注册社区格式非法](007-注册社区格式非法.md) |
+| 008 | 注册校验 | [注册社区不存在](008-注册社区不存在.md) |
+| 009 | 注册校验 | [注册身份类型非法](009-注册身份类型非法.md) |
+| 010 | 注册校验 | [注册邮箱格式非法](010-注册邮箱格式非法.md) |
+| 011 | 注册边界 | [昵称长度上界](011-昵称长度上界.md) |
+| 012 | 注册唯一性 | [重复身份注册](012-重复身份注册.md) |
+| 013 | 注册规则 | [昵称允许重复](013-昵称允许重复.md) |
+| 014 | 认证 | [发送邮箱验证码](014-发送邮箱验证码.md) |
+| 015 | 认证校验 | [验证码身份类型非法](015-验证码身份类型非法.md) |
+| 016 | 认证校验 | [验证码用途非法](016-验证码用途非法.md) |
+| 017 | 认证 | [邮箱验证码登录](017-邮箱验证码登录.md) |
+| 018 | 认证 | [刷新会话](018-刷新会话.md) |
+| 019 | 认证 | [刷新伪造令牌](019-刷新伪造令牌.md) |
+| 020 | 认证 | [退出撤销刷新令牌](020-退出撤销刷新令牌.md) |
+| 021 | 鉴权 | [未登录拒绝访问](021-未登录拒绝访问.md) |
+| 022 | 鉴权 | [伪造令牌拒绝访问](022-伪造令牌拒绝访问.md) |
+| 023 | 用户资料 | [修改资料及局部更新](023-修改资料及局部更新.md) |
+| 024 | 资料校验 | [资料性别非法](024-资料性别非法.md) |
+| 025 | 资料校验 | [资料生日为未来](025-资料生日为未来.md) |
+| 026 | 资料校验 | [资料昵称为空白](026-资料昵称为空白.md) |
+| 027 | 资料校验 | [资料昵称超长](027-资料昵称超长.md) |
+| 028 | 社区 | [社区七天冷却](028-社区七天冷却.md) |
+| 029 | 社区 | [社区满七天切换并重新冷却](029-社区满七天切换并重新冷却.md) |
+| 030 | 社区 | [相同社区重复设置](030-相同社区重复设置.md) |
+| 031 | 主题 | [发布主题无聊天室](031-发布主题无聊天室.md) |
+| 032 | 主题校验 | [主题缺少标题](032-主题缺少标题.md) |
+| 033 | 主题校验 | [主题空白标题](033-主题空白标题.md) |
+| 034 | 主题校验 | [主题缺少详情](034-主题缺少详情.md) |
+| 035 | 主题校验 | [主题空白详情](035-主题空白详情.md) |
+| 036 | 主题校验 | [主题标题超长](036-主题标题超长.md) |
+| 037 | 主题校验 | [主题年龄范围反向](037-主题年龄范围反向.md) |
+| 038 | 主题校验 | [主题年龄负数](038-主题年龄负数.md) |
+| 039 | 主题校验 | [主题年龄超过上界](039-主题年龄超过上界.md) |
+| 040 | 主题校验 | [主题性别非法](040-主题性别非法.md) |
+| 041 | 主题校验 | [主题过期时间格式非法](041-主题过期时间格式非法.md) |
+| 042 | 主题边界 | [主题标题长度上界](042-主题标题长度上界.md) |
+| 043 | 匹配 | [年龄性别匹配与上下界](043-年龄性别匹配与上下界.md) |
+| 044 | 匹配 | [缺失年龄不匹配年龄限制](044-缺失年龄不匹配年龄限制.md) |
+| 045 | 匹配 | [仅性别限制无需生日](045-仅性别限制无需生日.md) |
+| 046 | 主题权限 | [跨社区隔离](046-跨社区隔离.md) |
+| 047 | 主题维护 | [发布者修改主题](047-发布者修改主题.md) |
+| 048 | 主题权限 | [非发布者不可修改主题](048-非发布者不可修改主题.md) |
+| 049 | 主题权限 | [非发布者不可关闭主题](049-非发布者不可关闭主题.md) |
+| 050 | 主题生命周期 | [关闭主题与默认主题流](050-关闭主题与默认主题流.md) |
+| 051 | 主题生命周期 | [真实等待主题过期](051-真实等待主题过期.md) |
+| 052 | 社区与主题 | [主题社区快照](052-主题社区快照.md) |
+| 053 | 参与 | [首次接受及重复接受](053-首次接受及重复接受.md) |
+| 054 | 参与 | [后续参与者加入同一房间](054-后续参与者加入同一房间.md) |
+| 055 | 参与并发 | [并发首次接受](055-并发首次接受.md) |
+| 056 | 主题收件 | [已读收件幂等](056-已读收件幂等.md) |
+| 057 | 参与幂等 | [关闭后已接受重试](057-关闭后已接受重试.md) |
+| 058 | 参与权限 | [接受时重新检查资料](058-接受时重新检查资料.md) |
+| 059 | 参与权限 | [接受时重新检查社区](059-接受时重新检查社区.md) |
+| 060 | 参与权限 | [发布者不能接受自己主题](060-发布者不能接受自己主题.md) |
+| 061 | 参与权限 | [无收件用户不可接受](061-无收件用户不可接受.md) |
+| 062 | 分页 | [收件游标分页与状态过滤](062-收件游标分页与状态过滤.md) |
+| 063 | 聊天 | [发送文本并查询历史](063-发送文本并查询历史.md) |
+| 064 | 聊天 | [消息断网重试幂等](064-消息断网重试幂等.md) |
+| 065 | 聊天 | [不同发送者相同客户端ID](065-不同发送者相同客户端ID.md) |
+| 066 | 消息校验 | [空文本消息](066-空文本消息.md) |
+| 067 | 消息校验 | [空白文本消息](067-空白文本消息.md) |
+| 068 | 消息校验 | [未知消息类型](068-未知消息类型.md) |
+| 069 | 消息校验 | [客户端消息ID超长](069-客户端消息ID超长.md) |
+| 070 | 聊天权限 | [非成员读取房间](070-非成员读取房间.md) |
+| 071 | 聊天权限 | [非成员读取历史](071-非成员读取历史.md) |
+| 072 | 聊天权限 | [非成员发送消息](072-非成员发送消息.md) |
+| 073 | 聊天权限 | [非成员标记已读](073-非成员标记已读.md) |
+| 074 | 聊天权限 | [非成员撤回消息](074-非成员撤回消息.md) |
+| 075 | 聊天权限 | [只能撤回自己的消息](075-只能撤回自己的消息.md) |
+| 076 | 聊天已读 | [已读位置校验和持久化](076-已读位置校验和持久化.md) |
+| 077 | 聊天权限 | [跨房间撤回与已读](077-跨房间撤回与已读.md) |
+| 078 | 聊天生命周期 | [主题关闭后继续聊天](078-主题关闭后继续聊天.md) |
+| 079 | 聊天分页 | [消息历史分页](079-消息历史分页.md) |
+| 080 | 评价 | [提交好评及分类回查](080-提交好评及分类回查.md) |
+| 081 | 评价 | [提交中评及分类回查](081-提交中评及分类回查.md) |
+| 082 | 评价 | [提交差评及分类回查](082-提交差评及分类回查.md) |
+| 083 | 评价 | [评价可选字段省略](083-评价可选字段省略.md) |
+| 084 | 评价校验 | [禁止评价自己](084-禁止评价自己.md) |
+| 085 | 评价校验 | [评价评分非法](085-评价评分非法.md) |
+| 086 | 评价校验 | [评价分类非法](086-评价分类非法.md) |
+| 087 | 评价校验 | [评价评论超长](087-评价评论超长.md) |
+| 088 | 评价边界 | [评价评论长度上界](088-评价评论长度上界.md) |
+| 089 | 评价权限 | [禁止评价未接受用户](089-禁止评价未接受用户.md) |
+| 090 | 评价幂等 | [重复评价与双向评价](090-重复评价与双向评价.md) |
+| 091 | 评价统计 | [评价汇总数量和比例](091-评价汇总数量和比例.md) |
+| 092 | 评价隐私 | [公开评价不泄露联系方式](092-公开评价不泄露联系方式.md) |
+| 093 | 账号注销 | [注销撤销全部会话并释放身份](093-注销撤销全部会话并释放身份.md) |
+| 094 | 账号注销 | [注销发布者保留房间与历史](094-注销发布者保留房间与历史.md) |
+| 095 | 端到端 | [端到端独立业务闭环](095-端到端独立业务闭环.md) |
+| 096 | 通用参数 | [收件limit为零](096-收件limit为零.md) |
+| 097 | 通用参数 | [收件limit超过上限](097-收件limit超过上限.md) |
+| 098 | 通用参数 | [收件游标非法](098-收件游标非法.md) |
+| 099 | 通用参数 | [收件状态非法](099-收件状态非法.md) |
+| 100 | 通用参数 | [主题limit为零](100-主题limit为零.md) |
+| 101 | 通用参数 | [主题limit超过上限](101-主题limit超过上限.md) |
+| 102 | 通用协议 | [请求ID和UTC时间格式](102-请求ID和UTC时间格式.md) |
+| 103 | 通用协议 | [非法JSON和路径ID](103-非法JSON和路径ID.md) |
+| 104 | 账号状态 | [封禁账号不能执行业务](104-封禁账号不能执行业务.md) |
+| 105 | 主题分页 | [主题流游标分页](105-主题流游标分页.md) |
+| 106 | 评价分页 | [公开评价游标分页](106-公开评价游标分页.md) |
+
+## 契约差异与待补覆盖
+
+- 本套用例是验收预期，当前实现存在占位或缺失时应报失败，不把实现缺陷写成正确结果。例如评价汇总固定零、消息分页参数被忽略、已读只回显未持久化、评价分类保存后丢失，应由对应用例检出。
+- 邮箱校验关闭按用户提供的环境约定处理，不生成“随机验证码错误”的负例。当前代码登录路径仍调用 verifyCode；随机数字登录失败应记录此差异。手机号验证码供应商、可用号码和是否关闭校验未给出，未编造手机号成功用例。
+- 主题年龄约束仅最小值或仅最大值：REST 概述说可选，需求二又称“不完整必须拒绝”；需先统一后补独立断言。
+- 当前 API 没有匿名字段、申诉接口、系统评级触发/配置接口或公开用户资料接口；不编造路径。评级最小样本、阈值、补偿周期、算法版本也未确定，需补充这些契约后才能生成可独立执行的阈值、90天窗口、重试去重、恢复移除与历史追溯用例。
+- 验证码限流阈值、消息正文长度及附件受控域名/大小规范尚不明确；暂不指定虚构值。昵称重复按已确认决策允许。
+- 自动推送系统重试、事务故障注入、重启恢复和日志脱敏需要受控任务触发、故障注入/重启与日志访问方式；当前 HTTP 契约不提供这些操作，未将无法执行的步骤伪装成普通用例。
+- 跨社区接受统一按 REST 隐私约定断言40401；当前“已收到推送后换社区”实现可能返回40301。发布者接受自己主题的具体错误码尚未统一，但必须拒绝且不创建房间。
+- 本轮仅新增 Markdown 用例与此索引；不恢复原先删除的 XML 用例，也不使用旧邀请流程。

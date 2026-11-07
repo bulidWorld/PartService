@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<task name="019-刷新伪造令牌">
+  <parameters>
+    <parameter type="function" valueType="string"><name>invalidToken</name><value>generateUUID()</value></parameter>
+  </parameters>
+  <taskStep order="10">
+    <rest method="GET" path="/communities">
+      <auth mode="none"/>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    data = responseBody.get("data")
+    if not isinstance(data, list) or len(data) == 0:
+        raise Blocked("no community available")
+    return statusCode == 200 and responseBody.get("code") == 0 and all(item.get("id") and item.get("name") for item in data) and bool(responseBody.get("requestId"))
+]]></assertionCode>
+      <extractParam valueType="string"><name>c1</name><value>data[0].id</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="20">
+    <rest method="POST" path="/auth/refresh">
+      <header><name>Content-Type</name><value>application/json</value></header>
+      <auth mode="none"/>
+      <body>
+        <kv><key>refreshToken</key><parameter>invalidToken</parameter></kv>
+      </body>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    return statusCode == 401 and isinstance(responseBody, dict) and responseBody.get("code") == 40101
+]]></assertionCode>
+      <extractParam valueType="string"><name>r_access</name><value>data.accessToken</value></extractParam>
+      <extractParam valueType="string"><name>r_refresh</name><value>data.refreshToken</value></extractParam>
+      <extractParam valueType="string"><name>r_id</name><value>data.user.id</value></extractParam>
+    </rest>
+  </taskStep>
+  <finally>
+    <taskStep order="10" ifParameter="r_access">
+      <rest method="DELETE" path="/me">
+        <auth mode="bearer" parameter="r_access"/>
+        <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    return statusCode == 200 and isinstance(responseBody, dict) and responseBody.get("code") == 0 and isinstance(responseBody.get("data"), dict)
+]]></assertionCode>
+      </rest>
+    </taskStep>
+    <taskStep order="20" ifParameter="r_access">
+      <rest method="GET" path="/me">
+        <auth mode="bearer" parameter="r_access"/>
+        <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    return statusCode == 401 and isinstance(responseBody, dict) and responseBody.get("code") == 40101
+]]></assertionCode>
+      </rest>
+    </taskStep>
+  </finally>
+</task>

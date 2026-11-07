@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<task name="029-社区满七天切换并重新冷却">
+  <parameters>
+    <parameter type="function" valueType="string"><name>run</name><value>generateUUID()</value></parameter>
+    <parameter type="fixed" valueType="string"><name>code</name><value>123456</value></parameter>
+  </parameters>
+  <taskStep order="10">
+    <rest method="GET" path="/communities">
+      <auth mode="none"/>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    data = responseBody.get("data")
+    if not isinstance(data, list) or len(data) < 2:
+        raise Blocked("need at least two communities")
+    return statusCode == 200 and responseBody.get("code") == 0 and all(item.get("id") and item.get("name") for item in data) and bool(responseBody.get("requestId"))
+]]></assertionCode>
+      <extractParam valueType="string"><name>c1</name><value>data[0].id</value></extractParam>
+      <extractParam valueType="string"><name>c2</name><value>data[1].id</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="20">
+    <compute>
+      <parameter valueType="string"><name>a_email</name><value>concat("tc-", param("run"), "-a@example.com")</value></parameter>
+    </compute>
+  </taskStep>
+  <taskStep order="30">
+    <rest method="POST" path="/auth/register">
+      <header><name>Content-Type</name><value>application/json</value></header>
+      <auth mode="none"/>
+      <body>
+        <kv><key>identityType</key><value>email</value></kv>
+        <kv><key>identityValue</key><parameter>a_email</parameter></kv>
+        <kv><key>code</key><parameter>code</parameter></kv>
+        <kv><key>nickname</key><value>测029甲</value></kv>
+        <kv><key>communityId</key><parameter>c1</parameter></kv>
+      </body>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    data = responseBody.get("data") or {}
+    return statusCode == 200 and responseBody.get("code") == 0 and bool(data.get("accessToken")) and bool(data.get("refreshToken")) and isinstance(data.get("user"), dict) and bool(responseBody.get("requestId"))
+]]></assertionCode>
+      <extractParam valueType="string"><name>a_id</name><value>data.user.id</value></extractParam>
+      <extractParam valueType="string"><name>a_access</name><value>data.accessToken</value></extractParam>
+      <extractParam valueType="string"><name>a_refresh</name><value>data.refreshToken</value></extractParam>
+      <extractParam valueType="string"><name>reg_changed</name><value>data.user.communityChangedAt</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="40">
+    <sql driver="postgresql">
+      <datasource>jdbc:postgresql://127.0.0.1:5432/part_service_db</datasource>
+      <username>part_service</username>
+      <password>Changeme_123</password>
+      <statement>UPDATE "user" SET community_changed_at = now() - interval '7 days' - interval '2 seconds' WHERE id=%s</statement>
+      <parameters>
+        <parameter>a_id</parameter>
+      </parameters>
+    </sql>
+  </taskStep>
+  <taskStep order="50">
+    <compute timezone="UTC">
+      <parameter valueType="string"><name>seven_ago</name><value>isoformat(add_seconds(now(), -604800))</value></parameter>
+    </compute>
+  </taskStep>
+  <taskStep order="60">
+    <rest method="GET" path="/me">
+      <auth mode="bearer" parameter="a_access"/>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    data = responseBody.get("data")
+    if not isinstance(data, dict):
+        return False
+    changed = data.get("communityChangedAt")
+    return statusCode == 200 and responseBody.get("code") == 0 and bool(responseBody.get("requestId")) and isinstance(changed, str) and bool(changed) and changed < globalParam["seven_ago"] and changed != globalParam["reg_changed"]
+]]></assertionCode>
+      <extractParam valueType="string"><name>old7</name><value>data.communityChangedAt</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="70" ifParameter="c2" onFalse="blocked">
+    <rest method="PATCH" path="/me/community">
+      <header><name>Content-Type</name><value>application/json</value></header>
+      <auth mode="bearer" parameter="a_access"/>
+      <body>
+        <kv><key>communityId</key><parameter>c2</parameter></kv>
+      </body>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    return statusCode == 200 and responseBody.get("code") == 0 and isinstance(responseBody.get("data"), dict) and bool(responseBody.get("requestId"))
+]]></assertionCode>
+    </rest>
+  </taskStep>
+  <taskStep order="80">
+    <rest method="GET" path="/me">
+      <auth mode="bearer" parameter="a_access"/>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    data = responseBody.get("data")
+    if not isinstance(data, dict):
+        return False
+    changed = data.get("communityChangedAt")
+    return statusCode == 200 and responseBody.get("code") == 0 and bool(responseBody.get("requestId")) and data.get("communityId") == globalParam["c2"] and isinstance(changed, str) and bool(changed) and changed > globalParam["seven_ago"] and changed != globalParam["old7"]
+]]></assertionCode>
+    </rest>
+  </taskStep>
+  <taskStep order="90">
+    <rest method="PATCH" path="/me/community">
+      <header><name>Content-Type</name><value>application/json</value></header>
+      <auth mode="bearer" parameter="a_access"/>
+      <body>
+        <kv><key>communityId</key><parameter>c1</parameter></kv>
+      </body>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    return statusCode == 409 and responseBody.get("code") == 40901
+]]></assertionCode>
+    </rest>
+  </taskStep>
+  <finally>
+    <taskStep order="10" ifParameter="a_access">
+      <rest method="DELETE" path="/me">
+        <auth mode="bearer" parameter="a_access"/>
+        <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    return statusCode == 200 and responseBody.get("code") == 0 and isinstance(responseBody.get("data"), dict)
+]]></assertionCode>
+      </rest>
+    </taskStep>
+    <taskStep order="20" ifParameter="a_access">
+      <rest method="GET" path="/me">
+        <auth mode="bearer" parameter="a_access"/>
+        <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    return statusCode == 401 and responseBody.get("code") == 40101
+]]></assertionCode>
+      </rest>
+    </taskStep>
+  </finally>
+</task>

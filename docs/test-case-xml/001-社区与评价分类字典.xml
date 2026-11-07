@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<task name="001-社区与评价分类字典">
+  <taskStep order="10">
+    <rest method="GET" path="/communities">
+      <auth mode="none"/>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    data = responseBody.get("data")
+    if not isinstance(data, list) or len(data) == 0:
+        raise Blocked("no community available")
+    def is_uuid(value):
+        return (isinstance(value, str) and len(value) == 36
+                and all(ch in "0123456789abcdefABCDEF-" for ch in value)
+                and value[8] == "-" and value[13] == "-" and value[18] == "-" and value[23] == "-")
+    return (statusCode == 200 and responseBody.get("code") == 0
+            and all(is_uuid(item.get("id")) and isinstance(item.get("name"), str) and bool(item.get("name")) for item in data)
+            and bool(responseBody.get("requestId")))
+]]></assertionCode>
+      <extractParam valueType="string"><name>c1</name><value>data[0].id</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="20">
+    <rest method="GET" path="/rating-categories">
+      <auth mode="none"/>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    data = responseBody.get("data")
+    return (statusCode == 200 and responseBody.get("code") == 0
+            and isinstance(data, list) and len(data) > 0
+            and all(isinstance(item, str) and bool(item) for item in data)
+            and bool(responseBody.get("requestId")))
+]]></assertionCode>
+      <extractParam valueType="string"><name>category</name><value>data[0]</value></extractParam>
+    </rest>
+  </taskStep>
+</task>

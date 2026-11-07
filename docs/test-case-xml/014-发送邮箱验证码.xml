@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<task name="014-发送邮箱验证码">
+  <parameters>
+    <parameter type="function" valueType="string"><name>run</name><value>generateUUID()</value></parameter>
+  </parameters>
+  <taskStep order="10">
+    <rest method="GET" path="/communities">
+      <auth mode="none"/>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    data = responseBody.get("data")
+    if not isinstance(data, list) or len(data) == 0:
+        raise Blocked("no community available")
+    return statusCode == 200 and responseBody.get("code") == 0 and all(item.get("id") and item.get("name") for item in data) and bool(responseBody.get("requestId"))
+]]></assertionCode>
+      <extractParam valueType="string"><name>c1</name><value>data[0].id</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="20">
+    <compute>
+      <parameter valueType="string"><name>s_email</name><value>concat("tc-", param("run"), "-send@example.com")</value></parameter>
+    </compute>
+  </taskStep>
+  <taskStep order="30">
+    <rest method="POST" path="/auth/send-code">
+      <header><name>Content-Type</name><value>application/json</value></header>
+      <auth mode="none"/>
+      <body>
+        <kv><key>identityType</key><value>email</value></kv>
+        <kv><key>identityValue</key><parameter>s_email</parameter></kv>
+        <kv><key>purpose</key><value>register</value></kv>
+      </body>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    data = responseBody.get("data")
+    if not isinstance(data, dict):
+        return False
+    exp = data.get("expires_in")
+    wait = data.get("next_send_after")
+    return statusCode == 200 and responseBody.get("code") == 0 and isinstance(exp, int) and not isinstance(exp, bool) and exp > 0 and isinstance(wait, int) and not isinstance(wait, bool) and wait > 0 and "code" not in data and bool(responseBody.get("requestId"))
+]]></assertionCode>
+      <extractParam valueType="integer"><name>s_expires</name><value>data.expires_in</value></extractParam>
+      <extractParam valueType="integer"><name>s_wait</name><value>data.next_send_after</value></extractParam>
+    </rest>
+  </taskStep>
+  <finally>
+    <taskStep order="10" ifParameter="s_email">
+      <compute>
+        <parameter valueType="string"><name>codes_key</name><value>concat("email:", param("s_email"), ":register")</value></parameter>
+      </compute>
+    </taskStep>
+    <taskStep order="20" ifParameter="s_email">
+      <sql driver="postgresql">
+        <datasource>jdbc:postgresql://127.0.0.1:5432/part_service_db</datasource>
+        <username>part_service</username>
+        <password>Changeme_123</password>
+        <statement>DELETE FROM verification_code WHERE identity_value=%s</statement>
+        <parameters><parameter>s_email</parameter></parameters>
+      </sql>
+    </taskStep>
+    <taskStep order="30" ifParameter="codes_key">
+      <sql driver="postgresql">
+        <datasource>jdbc:postgresql://127.0.0.1:5432/part_service_db</datasource>
+        <username>part_service</username>
+        <password>Changeme_123</password>
+        <statement>DELETE FROM service_state WHERE namespace='codes' AND state_key=%s</statement>
+        <parameters><parameter>codes_key</parameter></parameters>
+      </sql>
+    </taskStep>
+  </finally>
+</task>

@@ -1,0 +1,580 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<task name="105-主题流游标分页">
+  <parameters>
+    <parameter type="function" valueType="string"><name>run</name><value>generateUUID()</value></parameter>
+    <parameter type="fixed" valueType="string"><name>code</name><value>123456</value></parameter>
+  </parameters>
+  <taskStep order="10">
+    <rest method="GET" path="/communities">
+      <auth mode="none"/>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    data = responseBody.get("data")
+    if not isinstance(data, list) or len(data) == 0:
+        raise Blocked("no community available")
+    return statusCode == 200 and responseBody.get("code") == 0 and all(item.get("id") and item.get("name") for item in data) and bool(responseBody.get("requestId"))
+]]></assertionCode>
+      <extractParam valueType="string"><name>c1</name><value>data[0].id</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="20">
+    <compute>
+      <parameter valueType="string"><name>a_email</name><value>concat("tc-", param("run"), "-a@example.com")</value></parameter>
+      <parameter valueType="string"><name>b_email</name><value>concat("tc-", param("run"), "-b@example.com")</value></parameter>
+      <parameter valueType="string"><name>title</name><value>concat("测试-", param("run"))</value></parameter>
+    </compute>
+  </taskStep>
+  <taskStep order="30">
+    <rest method="POST" path="/auth/register">
+      <header><name>Content-Type</name><value>application/json</value></header>
+      <auth mode="none"/>
+      <body>
+        <kv><key>identityType</key><value>email</value></kv>
+        <kv><key>identityValue</key><parameter>a_email</parameter></kv>
+        <kv><key>code</key><parameter>code</parameter></kv>
+        <kv><key>nickname</key><value>测105甲</value></kv>
+        <kv><key>communityId</key><parameter>c1</parameter></kv>
+      </body>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    if statusCode != 200 or responseBody.get("code") != 0:
+        return False
+    data = responseBody.get("data") or {}
+    if not isinstance(data, dict):
+        return False
+    if not data.get("accessToken") or not data.get("refreshToken"):
+        return False
+    user = data.get("user") or {}
+    return bool(user.get("id")) and bool(responseBody.get("requestId"))
+]]></assertionCode>
+      <extractParam valueType="string"><name>a_id</name><value>data.user.id</value></extractParam>
+      <extractParam valueType="string"><name>a_access</name><value>data.accessToken</value></extractParam>
+      <extractParam valueType="string"><name>a_refresh</name><value>data.refreshToken</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="40">
+    <rest method="POST" path="/auth/register">
+      <header><name>Content-Type</name><value>application/json</value></header>
+      <auth mode="none"/>
+      <body>
+        <kv><key>identityType</key><value>email</value></kv>
+        <kv><key>identityValue</key><parameter>b_email</parameter></kv>
+        <kv><key>code</key><parameter>code</parameter></kv>
+        <kv><key>nickname</key><value>测105乙</value></kv>
+        <kv><key>communityId</key><parameter>c1</parameter></kv>
+      </body>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    if statusCode != 200 or responseBody.get("code") != 0:
+        return False
+    data = responseBody.get("data") or {}
+    if not isinstance(data, dict):
+        return False
+    if not data.get("accessToken") or not data.get("refreshToken"):
+        return False
+    user = data.get("user") or {}
+    return bool(user.get("id")) and bool(responseBody.get("requestId"))
+]]></assertionCode>
+      <extractParam valueType="string"><name>b_id</name><value>data.user.id</value></extractParam>
+      <extractParam valueType="string"><name>b_access</name><value>data.accessToken</value></extractParam>
+      <extractParam valueType="string"><name>b_refresh</name><value>data.refreshToken</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="50">
+    <rest method="POST" path="/topics">
+      <header><name>Content-Type</name><value>application/json</value></header>
+      <auth mode="bearer" parameter="a_access"/>
+      <body>
+        <kv><key>title</key><parameter>title</parameter></kv>
+        <kv><key>detail</key><value>独立接口验收</value></kv>
+        <kv valueType="array"><key>genders</key><value>[]</value></kv>
+      </body>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    if statusCode != 200 or responseBody.get("code") != 0:
+        return False
+    data = responseBody.get("data") or {}
+    return data.get("publisherId") == globalParam.get("a_id") and data.get("communityId") == globalParam.get("c1") and data.get("status") == "open" and bool(data.get("id")) and bool(responseBody.get("requestId"))
+]]></assertionCode>
+      <extractParam valueType="string"><name>t1</name><value>data.id</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="60">
+    <rest method="POST" path="/topics">
+      <header><name>Content-Type</name><value>application/json</value></header>
+      <auth mode="bearer" parameter="a_access"/>
+      <body>
+        <kv><key>title</key><parameter>title</parameter></kv>
+        <kv><key>detail</key><value>独立接口验收</value></kv>
+        <kv valueType="array"><key>genders</key><value>[]</value></kv>
+      </body>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    if statusCode != 200 or responseBody.get("code") != 0:
+        return False
+    data = responseBody.get("data") or {}
+    return data.get("publisherId") == globalParam.get("a_id") and data.get("communityId") == globalParam.get("c1") and data.get("status") == "open" and bool(data.get("id")) and bool(responseBody.get("requestId"))
+]]></assertionCode>
+      <extractParam valueType="string"><name>t2</name><value>data.id</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="70">
+    <rest method="POST" path="/topics">
+      <header><name>Content-Type</name><value>application/json</value></header>
+      <auth mode="bearer" parameter="a_access"/>
+      <body>
+        <kv><key>title</key><parameter>title</parameter></kv>
+        <kv><key>detail</key><value>独立接口验收</value></kv>
+        <kv valueType="array"><key>genders</key><value>[]</value></kv>
+      </body>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    if statusCode != 200 or responseBody.get("code") != 0:
+        return False
+    data = responseBody.get("data") or {}
+    return data.get("publisherId") == globalParam.get("a_id") and data.get("communityId") == globalParam.get("c1") and data.get("status") == "open" and bool(data.get("id")) and bool(responseBody.get("requestId"))
+]]></assertionCode>
+      <extractParam valueType="string"><name>t3</name><value>data.id</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="80">
+    <rest method="GET" path="/topics">
+      <auth mode="bearer" parameter="b_access"/>
+      <queryParams>
+        <kv><key>status</key><value>open</value></kv>
+        <kv valueType="integer"><key>limit</key><value>1</value></kv>
+      </queryParams>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    if statusCode != 200 or responseBody.get("code") != 0:
+        return False
+    data = responseBody.get("data") or {}
+    items = data.get("items")
+    if not isinstance(items, list) or len(items) != 1:
+        return False
+    if data.get("hasMore") is not True:
+        return False
+    cursor = data.get("nextCursor")
+    if not isinstance(cursor, str) or not cursor:
+        return False
+    return bool(responseBody.get("requestId"))
+]]></assertionCode>
+      <extractParam valueType="string"><name>w1</name><value>data.items[0].id</value></extractParam>
+      <extractParam valueType="boolean"><name>hm1</name><value>data.hasMore</value></extractParam>
+      <extractParam valueType="string"><name>cur1</name><value>data.nextCursor</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="90" ifParameter="cur1">
+    <rest method="GET" path="/topics">
+      <auth mode="bearer" parameter="b_access"/>
+      <queryParams>
+        <kv><key>status</key><value>open</value></kv>
+        <kv valueType="integer"><key>limit</key><value>1</value></kv>
+        <kv><key>cursor</key><parameter>cur1</parameter></kv>
+      </queryParams>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    if statusCode != 200 or responseBody.get("code") != 0:
+        return False
+    data = responseBody.get("data") or {}
+    items = data.get("items")
+    if not isinstance(items, list) or len(items) != 1:
+        return False
+    more = data.get("hasMore")
+    cursor = data.get("nextCursor")
+    if more is True:
+        if not isinstance(cursor, str) or not cursor:
+            return False
+    elif more is False:
+        if cursor is not None:
+            return False
+    else:
+        return False
+    return bool(responseBody.get("requestId"))
+]]></assertionCode>
+      <extractParam valueType="string"><name>w2</name><value>data.items[0].id</value></extractParam>
+      <extractParam valueType="boolean"><name>hm2</name><value>data.hasMore</value></extractParam>
+      <extractParam valueType="string"><name>cur2</name><value>data.nextCursor</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="100" ifParameter="cur2">
+    <rest method="GET" path="/topics">
+      <auth mode="bearer" parameter="b_access"/>
+      <queryParams>
+        <kv><key>status</key><value>open</value></kv>
+        <kv valueType="integer"><key>limit</key><value>1</value></kv>
+        <kv><key>cursor</key><parameter>cur2</parameter></kv>
+      </queryParams>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    if statusCode != 200 or responseBody.get("code") != 0:
+        return False
+    data = responseBody.get("data") or {}
+    items = data.get("items")
+    if not isinstance(items, list) or len(items) != 1:
+        return False
+    more = data.get("hasMore")
+    cursor = data.get("nextCursor")
+    if more is True:
+        if not isinstance(cursor, str) or not cursor:
+            return False
+    elif more is False:
+        if cursor is not None:
+            return False
+    else:
+        return False
+    return bool(responseBody.get("requestId"))
+]]></assertionCode>
+      <extractParam valueType="string"><name>w3</name><value>data.items[0].id</value></extractParam>
+      <extractParam valueType="boolean"><name>hm3</name><value>data.hasMore</value></extractParam>
+      <extractParam valueType="string"><name>cur3</name><value>data.nextCursor</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="110" ifParameter="cur3">
+    <rest method="GET" path="/topics">
+      <auth mode="bearer" parameter="b_access"/>
+      <queryParams>
+        <kv><key>status</key><value>open</value></kv>
+        <kv valueType="integer"><key>limit</key><value>1</value></kv>
+        <kv><key>cursor</key><parameter>cur3</parameter></kv>
+      </queryParams>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    if statusCode != 200 or responseBody.get("code") != 0:
+        return False
+    data = responseBody.get("data") or {}
+    items = data.get("items")
+    if not isinstance(items, list) or len(items) != 1:
+        return False
+    more = data.get("hasMore")
+    cursor = data.get("nextCursor")
+    if more is True:
+        if not isinstance(cursor, str) or not cursor:
+            return False
+    elif more is False:
+        if cursor is not None:
+            return False
+    else:
+        return False
+    return bool(responseBody.get("requestId"))
+]]></assertionCode>
+      <extractParam valueType="string"><name>w4</name><value>data.items[0].id</value></extractParam>
+      <extractParam valueType="boolean"><name>hm4</name><value>data.hasMore</value></extractParam>
+      <extractParam valueType="string"><name>cur4</name><value>data.nextCursor</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="120" ifParameter="cur4">
+    <rest method="GET" path="/topics">
+      <auth mode="bearer" parameter="b_access"/>
+      <queryParams>
+        <kv><key>status</key><value>open</value></kv>
+        <kv valueType="integer"><key>limit</key><value>1</value></kv>
+        <kv><key>cursor</key><parameter>cur4</parameter></kv>
+      </queryParams>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    if statusCode != 200 or responseBody.get("code") != 0:
+        return False
+    data = responseBody.get("data") or {}
+    items = data.get("items")
+    if not isinstance(items, list) or len(items) != 1:
+        return False
+    more = data.get("hasMore")
+    cursor = data.get("nextCursor")
+    if more is True:
+        if not isinstance(cursor, str) or not cursor:
+            return False
+    elif more is False:
+        if cursor is not None:
+            return False
+    else:
+        return False
+    return bool(responseBody.get("requestId"))
+]]></assertionCode>
+      <extractParam valueType="string"><name>w5</name><value>data.items[0].id</value></extractParam>
+      <extractParam valueType="boolean"><name>hm5</name><value>data.hasMore</value></extractParam>
+      <extractParam valueType="string"><name>cur5</name><value>data.nextCursor</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="130" ifParameter="cur5">
+    <rest method="GET" path="/topics">
+      <auth mode="bearer" parameter="b_access"/>
+      <queryParams>
+        <kv><key>status</key><value>open</value></kv>
+        <kv valueType="integer"><key>limit</key><value>1</value></kv>
+        <kv><key>cursor</key><parameter>cur5</parameter></kv>
+      </queryParams>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    if statusCode != 200 or responseBody.get("code") != 0:
+        return False
+    data = responseBody.get("data") or {}
+    items = data.get("items")
+    if not isinstance(items, list) or len(items) != 1:
+        return False
+    more = data.get("hasMore")
+    cursor = data.get("nextCursor")
+    if more is True:
+        if not isinstance(cursor, str) or not cursor:
+            return False
+    elif more is False:
+        if cursor is not None:
+            return False
+    else:
+        return False
+    return bool(responseBody.get("requestId"))
+]]></assertionCode>
+      <extractParam valueType="string"><name>w6</name><value>data.items[0].id</value></extractParam>
+      <extractParam valueType="boolean"><name>hm6</name><value>data.hasMore</value></extractParam>
+      <extractParam valueType="string"><name>cur6</name><value>data.nextCursor</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="140" ifParameter="cur6">
+    <rest method="GET" path="/topics">
+      <auth mode="bearer" parameter="b_access"/>
+      <queryParams>
+        <kv><key>status</key><value>open</value></kv>
+        <kv valueType="integer"><key>limit</key><value>1</value></kv>
+        <kv><key>cursor</key><parameter>cur6</parameter></kv>
+      </queryParams>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    if statusCode != 200 or responseBody.get("code") != 0:
+        return False
+    data = responseBody.get("data") or {}
+    items = data.get("items")
+    if not isinstance(items, list) or len(items) != 1:
+        return False
+    more = data.get("hasMore")
+    cursor = data.get("nextCursor")
+    if more is True:
+        if not isinstance(cursor, str) or not cursor:
+            return False
+    elif more is False:
+        if cursor is not None:
+            return False
+    else:
+        return False
+    return bool(responseBody.get("requestId"))
+]]></assertionCode>
+      <extractParam valueType="string"><name>w7</name><value>data.items[0].id</value></extractParam>
+      <extractParam valueType="boolean"><name>hm7</name><value>data.hasMore</value></extractParam>
+      <extractParam valueType="string"><name>cur7</name><value>data.nextCursor</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="150" ifParameter="cur7">
+    <rest method="GET" path="/topics">
+      <auth mode="bearer" parameter="b_access"/>
+      <queryParams>
+        <kv><key>status</key><value>open</value></kv>
+        <kv valueType="integer"><key>limit</key><value>1</value></kv>
+        <kv><key>cursor</key><parameter>cur7</parameter></kv>
+      </queryParams>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    if statusCode != 200 or responseBody.get("code") != 0:
+        return False
+    data = responseBody.get("data") or {}
+    items = data.get("items")
+    if not isinstance(items, list) or len(items) != 1:
+        return False
+    more = data.get("hasMore")
+    cursor = data.get("nextCursor")
+    if more is True:
+        if not isinstance(cursor, str) or not cursor:
+            return False
+    elif more is False:
+        if cursor is not None:
+            return False
+    else:
+        return False
+    return bool(responseBody.get("requestId"))
+]]></assertionCode>
+      <extractParam valueType="string"><name>w8</name><value>data.items[0].id</value></extractParam>
+      <extractParam valueType="boolean"><name>hm8</name><value>data.hasMore</value></extractParam>
+      <extractParam valueType="string"><name>cur8</name><value>data.nextCursor</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="160" ifParameter="cur8">
+    <rest method="GET" path="/topics">
+      <auth mode="bearer" parameter="b_access"/>
+      <queryParams>
+        <kv><key>status</key><value>open</value></kv>
+        <kv valueType="integer"><key>limit</key><value>1</value></kv>
+        <kv><key>cursor</key><parameter>cur8</parameter></kv>
+      </queryParams>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    if statusCode != 200 or responseBody.get("code") != 0:
+        return False
+    data = responseBody.get("data") or {}
+    items = data.get("items")
+    if not isinstance(items, list) or len(items) != 1:
+        return False
+    more = data.get("hasMore")
+    cursor = data.get("nextCursor")
+    if more is True:
+        if not isinstance(cursor, str) or not cursor:
+            return False
+    elif more is False:
+        if cursor is not None:
+            return False
+    else:
+        return False
+    return bool(responseBody.get("requestId"))
+]]></assertionCode>
+      <extractParam valueType="string"><name>w9</name><value>data.items[0].id</value></extractParam>
+      <extractParam valueType="boolean"><name>hm9</name><value>data.hasMore</value></extractParam>
+      <extractParam valueType="string"><name>cur9</name><value>data.nextCursor</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="170" ifParameter="cur9">
+    <rest method="GET" path="/topics">
+      <auth mode="bearer" parameter="b_access"/>
+      <queryParams>
+        <kv><key>status</key><value>open</value></kv>
+        <kv valueType="integer"><key>limit</key><value>1</value></kv>
+        <kv><key>cursor</key><parameter>cur9</parameter></kv>
+      </queryParams>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    if statusCode != 200 or responseBody.get("code") != 0:
+        return False
+    data = responseBody.get("data") or {}
+    items = data.get("items")
+    if not isinstance(items, list) or len(items) != 1:
+        return False
+    more = data.get("hasMore")
+    cursor = data.get("nextCursor")
+    if more is True:
+        if not isinstance(cursor, str) or not cursor:
+            return False
+    elif more is False:
+        if cursor is not None:
+            return False
+    else:
+        return False
+    return bool(responseBody.get("requestId"))
+]]></assertionCode>
+      <extractParam valueType="string"><name>w10</name><value>data.items[0].id</value></extractParam>
+      <extractParam valueType="boolean"><name>hm10</name><value>data.hasMore</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="180">
+    <rest method="GET" path="/topics">
+      <auth mode="bearer" parameter="b_access"/>
+      <queryParams>
+        <kv><key>status</key><value>open</value></kv>
+        <kv valueType="integer"><key>limit</key><value>100</value></kv>
+      </queryParams>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    if statusCode != 200 or responseBody.get("code") != 0:
+        return False
+    data = responseBody.get("data") or {}
+    items = data.get("items")
+    if not isinstance(items, list):
+        return False
+    t1 = globalParam.get("t1")
+    t2 = globalParam.get("t2")
+    t3 = globalParam.get("t3")
+    if not (t1 and t2 and t3):
+        return False
+    def count(seq, target):
+        n = 0
+        for x in seq:
+            if x == target:
+                n += 1
+        return n
+    scan_ids = [item.get("id") for item in items if isinstance(item, dict)]
+    if count(scan_ids, t1) != 1 or count(scan_ids, t2) != 1 or count(scan_ids, t3) != 1:
+        return False
+    walked = [globalParam.get("w" + str(i)) for i in range(1, 11)]
+    walked = [x for x in walked if x]
+    if count(walked, t1) != 1 or count(walked, t2) != 1 or count(walked, t3) != 1:
+        return False
+    if globalParam.get("hm10") is True:
+        return False
+    return bool(responseBody.get("requestId"))
+]]></assertionCode>
+    </rest>
+  </taskStep>
+  <finally>
+    <taskStep order="10" ifParameter="b_access">
+      <rest method="DELETE" path="/me">
+        <auth mode="bearer" parameter="b_access"/>
+        <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    data = responseBody.get("data")
+    return statusCode == 200 and responseBody.get("code") == 0 and isinstance(data, dict) and len(data) == 0 and bool(responseBody.get("requestId"))
+]]></assertionCode>
+      </rest>
+    </taskStep>
+    <taskStep order="20" ifParameter="b_access">
+      <rest method="GET" path="/me">
+        <auth mode="bearer" parameter="b_access"/>
+        <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    return statusCode == 401 and responseBody is not None and responseBody.get("code") == 40101
+]]></assertionCode>
+      </rest>
+    </taskStep>
+    <taskStep order="30" ifParameter="a_access">
+      <rest method="DELETE" path="/me">
+        <auth mode="bearer" parameter="a_access"/>
+        <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    data = responseBody.get("data")
+    return statusCode == 200 and responseBody.get("code") == 0 and isinstance(data, dict) and len(data) == 0 and bool(responseBody.get("requestId"))
+]]></assertionCode>
+      </rest>
+    </taskStep>
+    <taskStep order="40" ifParameter="a_access">
+      <rest method="GET" path="/me">
+        <auth mode="bearer" parameter="a_access"/>
+        <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    return statusCode == 401 and responseBody is not None and responseBody.get("code") == 40101
+]]></assertionCode>
+      </rest>
+    </taskStep>
+  </finally>
+</task>

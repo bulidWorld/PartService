@@ -1,0 +1,247 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<task name="087-评价评论超长">
+  <parameters>
+    <parameter type="function" valueType="string"><name>run</name><value>generateUUID()</value></parameter>
+    <parameter type="fixed" valueType="string"><name>code</name><value>123456</value></parameter>
+    <parameter type="fixed" valueType="string"><name>a_nickname</name><value>测087甲</value></parameter>
+    <parameter type="fixed" valueType="string"><name>b_nickname</name><value>测087乙</value></parameter>
+  </parameters>
+  <taskStep order="10">
+    <rest method="GET" path="/communities">
+      <auth mode="none"/>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    if statusCode != 200 or responseBody.get("code") != 0:
+        return False
+    data = responseBody.get("data")
+    if not isinstance(data, list) or len(data) == 0:
+        raise Blocked("no community available")
+    return all(isinstance(item, dict) and bool(item.get("id")) and bool(item.get("name")) for item in data) and bool(responseBody.get("requestId"))
+]]></assertionCode>
+      <extractParam valueType="string"><name>c1</name><value>data[0].id</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="20">
+    <compute>
+      <parameter valueType="string"><name>a_email</name><value>concat("tc-", param("run"), "-a@example.com")</value></parameter>
+      <parameter valueType="string"><name>b_email</name><value>concat("tc-", param("run"), "-b@example.com")</value></parameter>
+      <parameter valueType="string"><name>topic_title</name><value>concat("测试-", param("run"))</value></parameter>
+      <parameter valueType="string"><name>long_comment</name><value>concat("评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评评")</value></parameter>
+    </compute>
+  </taskStep>
+  <taskStep order="30">
+    <rest method="POST" path="/auth/register">
+      <header><name>Content-Type</name><value>application/json</value></header>
+      <auth mode="none"/>
+      <body>
+        <kv><key>identityType</key><value>email</value></kv>
+        <kv><key>identityValue</key><parameter>a_email</parameter></kv>
+        <kv><key>code</key><parameter>code</parameter></kv>
+        <kv><key>nickname</key><parameter>a_nickname</parameter></kv>
+        <kv><key>communityId</key><parameter>c1</parameter></kv>
+      </body>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    if statusCode != 200 or responseBody.get("code") != 0 or not responseBody.get("requestId"):
+        return False
+    data = responseBody.get("data") or {}
+    user = data.get("user") or {}
+    return bool(user.get("id")) and bool(data.get("accessToken")) and bool(data.get("refreshToken")) and user.get("communityId") == globalParam["c1"]
+]]></assertionCode>
+      <extractParam valueType="string"><name>a_id</name><value>data.user.id</value></extractParam>
+      <extractParam valueType="string"><name>a_access</name><value>data.accessToken</value></extractParam>
+      <extractParam valueType="string"><name>a_refresh</name><value>data.refreshToken</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="40">
+    <rest method="POST" path="/auth/register">
+      <header><name>Content-Type</name><value>application/json</value></header>
+      <auth mode="none"/>
+      <body>
+        <kv><key>identityType</key><value>email</value></kv>
+        <kv><key>identityValue</key><parameter>b_email</parameter></kv>
+        <kv><key>code</key><parameter>code</parameter></kv>
+        <kv><key>nickname</key><parameter>b_nickname</parameter></kv>
+        <kv><key>communityId</key><parameter>c1</parameter></kv>
+      </body>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    if statusCode != 200 or responseBody.get("code") != 0 or not responseBody.get("requestId"):
+        return False
+    data = responseBody.get("data") or {}
+    user = data.get("user") or {}
+    return bool(user.get("id")) and bool(data.get("accessToken")) and bool(data.get("refreshToken")) and user.get("communityId") == globalParam["c1"]
+]]></assertionCode>
+      <extractParam valueType="string"><name>b_id</name><value>data.user.id</value></extractParam>
+      <extractParam valueType="string"><name>b_access</name><value>data.accessToken</value></extractParam>
+      <extractParam valueType="string"><name>b_refresh</name><value>data.refreshToken</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="50">
+    <rest method="POST" path="/topics">
+      <header><name>Content-Type</name><value>application/json</value></header>
+      <auth mode="bearer" parameter="a_access"/>
+      <body>
+        <kv><key>title</key><parameter>topic_title</parameter></kv>
+        <kv><key>detail</key><value>独立接口验收</value></kv>
+        <kv valueType="array"><key>genders</key><value>[]</value></kv>
+      </body>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    if statusCode != 200 or responseBody.get("code") != 0 or not responseBody.get("requestId"):
+        return False
+    data = responseBody.get("data") or {}
+    return bool(data.get("id")) and data.get("publisherId") == globalParam["a_id"] and data.get("communityId") == globalParam["c1"] and data.get("status") == "open"
+]]></assertionCode>
+      <extractParam valueType="string"><name>T</name><value>data.id</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="60">
+    <rest method="GET" path="/topics/receipts">
+      <auth mode="bearer" parameter="b_access"/>
+      <queryParams>
+        <kv><key>status</key><value>pending</value></kv>
+        <kv valueType="integer"><key>limit</key><value>100</value></kv>
+      </queryParams>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if not isinstance(responseBody, dict):
+        return False
+    if statusCode != 200 or responseBody.get("code") != 0 or not responseBody.get("requestId"):
+        return False
+    page = responseBody.get("data")
+    if not isinstance(page, dict) or not isinstance(page.get("items"), list):
+        return False
+    matches = [item for item in page["items"] if isinstance(item, dict) and item.get("topicId") == globalParam["T"]]
+    return len(matches) == 1
+]]></assertionCode>
+      <poll maxAttempts="30" intervalMilliseconds="1000" timeoutSeconds="30"/>
+    </rest>
+  </taskStep>
+  <taskStep order="70">
+    <rest method="POST" path="/topics/{topicId}/accept">
+      <auth mode="bearer" parameter="b_access"/>
+      <pathParams>
+        <kv><key>topicId</key><parameter>T</parameter></kv>
+      </pathParams>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if not isinstance(responseBody, dict):
+        return False
+    if statusCode != 200 or responseBody.get("code") != 0 or not responseBody.get("requestId"):
+        return False
+    data = responseBody.get("data")
+    if not isinstance(data, dict):
+        return False
+    return data.get("topicId") == globalParam["T"] and data.get("status") == "accepted" and bool(data.get("roomId"))
+]]></assertionCode>
+      <extractParam valueType="string"><name>r_id</name><value>data.roomId</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="80">
+    <rest method="POST" path="/topics/{topicId}/ratings">
+      <header><name>Content-Type</name><value>application/json</value></header>
+      <auth mode="bearer" parameter="a_access"/>
+      <pathParams>
+        <kv><key>topicId</key><parameter>T</parameter></kv>
+      </pathParams>
+      <body>
+        <kv><key>toUserId</key><parameter>b_id</parameter></kv>
+        <kv><key>score</key><value>good</value></kv>
+        <kv valueType="array"><key>categoryCodes</key><value>[]</value></kv>
+        <kv><key>comment</key><parameter>long_comment</parameter></kv>
+      </body>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if not isinstance(responseBody, dict):
+        return False
+    if statusCode != 400 or responseBody.get("code") != 40001:
+        return False
+    msg = responseBody.get("message")
+    if isinstance(msg, str) and ("Traceback" in msg or "Exception" in msg):
+        return False
+    return True
+]]></assertionCode>
+    </rest>
+  </taskStep>
+  <taskStep order="90">
+    <rest method="GET" path="/users/{userId}/ratings">
+      <auth mode="none"/>
+      <pathParams>
+        <kv><key>userId</key><parameter>b_id</parameter></kv>
+      </pathParams>
+      <queryParams>
+        <kv valueType="integer"><key>limit</key><value>100</value></kv>
+      </queryParams>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if not isinstance(responseBody, dict):
+        return False
+    if statusCode != 200 or responseBody.get("code") != 0 or not responseBody.get("requestId"):
+        return False
+    page = responseBody.get("data")
+    if not isinstance(page, dict) or not isinstance(page.get("items"), list):
+        return False
+    matches = [item for item in page["items"] if isinstance(item, dict) and item.get("topicId") == globalParam["T"]]
+    return len(matches) == 0
+]]></assertionCode>
+    </rest>
+  </taskStep>
+  <finally>
+  <taskStep order="10" ifParameter="b_access">
+    <rest method="DELETE" path="/me">
+      <auth mode="bearer" parameter="b_access"/>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    return statusCode == 200 and responseBody is not None and responseBody.get("code") == 0 and isinstance(responseBody.get("data"), dict)
+]]></assertionCode>
+    </rest>
+  </taskStep>
+  <taskStep order="20" ifParameter="b_access">
+    <rest method="GET" path="/me">
+      <auth mode="bearer" parameter="b_access"/>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    return statusCode == 401 and responseBody is not None and responseBody.get("code") == 40101
+]]></assertionCode>
+    </rest>
+  </taskStep>
+  <taskStep order="30" ifParameter="a_access">
+    <rest method="DELETE" path="/me">
+      <auth mode="bearer" parameter="a_access"/>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    return statusCode == 200 and responseBody is not None and responseBody.get("code") == 0 and isinstance(responseBody.get("data"), dict)
+]]></assertionCode>
+    </rest>
+  </taskStep>
+  <taskStep order="40" ifParameter="a_access">
+    <rest method="GET" path="/me">
+      <auth mode="bearer" parameter="a_access"/>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    return statusCode == 401 and responseBody is not None and responseBody.get("code") == 40101
+]]></assertionCode>
+    </rest>
+  </taskStep>
+  <taskStep order="50" ifParameter="r_id">
+    <sql driver="postgresql">
+      <datasource>jdbc:postgresql://127.0.0.1:5432/part_service_db</datasource>
+      <username>part_service</username>
+      <password>Changeme_123</password>
+      <statement>DELETE FROM chat_room WHERE id = %s</statement>
+      <parameters>
+        <parameter>r_id</parameter>
+      </parameters>
+    </sql>
+  </taskStep>
+  </finally>
+</task>

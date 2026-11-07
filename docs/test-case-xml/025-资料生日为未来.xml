@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<task name="025-资料生日为未来">
+  <parameters>
+    <parameter type="function" valueType="string"><name>run</name><value>generateUUID()</value></parameter>
+    <parameter type="fixed" valueType="string"><name>code</name><value>123456</value></parameter>
+  </parameters>
+  <taskStep order="10">
+    <rest method="GET" path="/communities">
+      <auth mode="none"/>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    data = responseBody.get("data")
+    if not isinstance(data, list) or len(data) == 0:
+        raise Blocked("no community available")
+    return statusCode == 200 and responseBody.get("code") == 0 and all(item.get("id") and item.get("name") for item in data) and bool(responseBody.get("requestId"))
+]]></assertionCode>
+      <extractParam valueType="string"><name>c1</name><value>data[0].id</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="20">
+    <compute>
+      <parameter valueType="string"><name>a_email</name><value>concat("tc-", param("run"), "-a@example.com")</value></parameter>
+    </compute>
+  </taskStep>
+  <taskStep order="30">
+    <rest method="POST" path="/auth/register">
+      <header><name>Content-Type</name><value>application/json</value></header>
+      <auth mode="none"/>
+      <body>
+        <kv><key>identityType</key><value>email</value></kv>
+        <kv><key>identityValue</key><parameter>a_email</parameter></kv>
+        <kv><key>code</key><parameter>code</parameter></kv>
+        <kv><key>nickname</key><value>测025甲</value></kv>
+        <kv><key>communityId</key><parameter>c1</parameter></kv>
+      </body>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    data = responseBody.get("data") or {}
+    return statusCode == 200 and responseBody.get("code") == 0 and bool(data.get("accessToken")) and bool(data.get("refreshToken")) and bool(responseBody.get("requestId"))
+]]></assertionCode>
+      <extractParam valueType="string"><name>a_id</name><value>data.user.id</value></extractParam>
+      <extractParam valueType="string"><name>a_access</name><value>data.accessToken</value></extractParam>
+      <extractParam valueType="string"><name>a_refresh</name><value>data.refreshToken</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="40">
+    <rest method="GET" path="/me">
+      <auth mode="bearer" parameter="a_access"/>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if not isinstance(responseBody, dict):
+        return False
+    data = responseBody.get("data") or {}
+    return statusCode == 200 and responseBody.get("code") == 0 and bool(responseBody.get("requestId")) and isinstance(data, dict) and bool(data.get("id"))
+]]></assertionCode>
+      <extractParam valueType="string"><name>p_nickname</name><value>data.nickname</value></extractParam>
+      <extractParam valueType="string"><name>p_gender</name><value>data.gender</value></extractParam>
+      <extractParam valueType="string"><name>p_birth</name><value>data.birthDate</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="50">
+    <rest method="PATCH" path="/me">
+      <header><name>Content-Type</name><value>application/json</value></header>
+      <auth mode="bearer" parameter="a_access"/>
+      <body>
+        <kv><key>birthDate</key><value>2099-01-01</value></kv>
+      </body>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    return statusCode == 400 and isinstance(responseBody, dict) and responseBody.get("code") == 40001
+]]></assertionCode>
+    </rest>
+  </taskStep>
+  <taskStep order="60">
+    <rest method="GET" path="/me">
+      <auth mode="bearer" parameter="a_access"/>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if not isinstance(responseBody, dict):
+        return False
+    data = responseBody.get("data") or {}
+    return statusCode == 200 and responseBody.get("code") == 0 and bool(responseBody.get("requestId")) and data.get("nickname") == globalParam.get("p_nickname") and data.get("gender") == globalParam.get("p_gender") and data.get("birthDate") == globalParam.get("p_birth")
+]]></assertionCode>
+    </rest>
+  </taskStep>
+  <finally>
+    <taskStep order="10" ifParameter="a_access">
+      <rest method="DELETE" path="/me">
+        <auth mode="bearer" parameter="a_access"/>
+        <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    return statusCode == 200 and isinstance(responseBody, dict) and responseBody.get("code") == 0 and isinstance(responseBody.get("data"), dict)
+]]></assertionCode>
+      </rest>
+    </taskStep>
+    <taskStep order="20" ifParameter="a_access">
+      <rest method="GET" path="/me">
+        <auth mode="bearer" parameter="a_access"/>
+        <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    return statusCode == 401 and isinstance(responseBody, dict) and responseBody.get("code") == 40101
+]]></assertionCode>
+      </rest>
+    </taskStep>
+  </finally>
+</task>

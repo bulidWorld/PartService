@@ -10,6 +10,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 import com.partapp.partservice.api.ApiResponse;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolationException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -23,6 +24,11 @@ public class ApiExceptionHandler {
     @ExceptionHandler(NoResourceFoundException.class)
     ResponseEntity<ApiResponse<Void>> handleNotFound(NoResourceFoundException e, HttpServletRequest r) {
         return ResponseEntity.status(404).body(new ApiResponse<>(40401, "接口不存在", null, id(r)));
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    ResponseEntity<ApiResponse<Void>> handleValidation(ConstraintViolationException e, HttpServletRequest r) {
+        return ResponseEntity.badRequest().body(new ApiResponse<>(40001, "请求参数不合法", null, id(r)));
     }
 
     @ExceptionHandler(Exception.class)

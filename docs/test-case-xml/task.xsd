@@ -79,7 +79,7 @@
   </xs:simpleType>
   <xs:complexType name="pair">
     <xs:annotation>
-      <xs:documentation xml:lang="zh">通用 name/value 结构，子元素顺序固定为 name、value。用于固定参数、请求头、响应提取和 compute 表达式参数声明；其中 value 在 extractParam 内表示提取表达式，其余位置表示字面值。</xs:documentation>
+      <xs:documentation xml:lang="zh">通用 name/value 结构，子元素顺序固定为 name、value。用于固定参数、请求头、响应提取和 compute 表达式参数声明；其中 value 在 extractParam 内表示提取表达式，在 compute 内表示受限表达式；任务级 type="function" 参数显式调用 generateUUID() 内置函数。</xs:documentation>
     </xs:annotation>
     <xs:sequence>
       <xs:element name="name" type="nonEmpty">
@@ -89,13 +89,13 @@
       </xs:element>
       <xs:element name="value" type="xs:string">
         <xs:annotation>
-          <xs:documentation xml:lang="zh">必填文本元素。固定参数和 header 的内容按父元素 valueType 解释，string 可为空且保留值的首尾空白；compute/parameter 中填写受限表达式代码；extractParam 中必须填写响应 JSON 提取表达式，例如 data[0].id，不能填写 JSON 字面值或 Python 代码。</xs:documentation>
+          <xs:documentation xml:lang="zh">必填文本元素。fixed 参数和 header 的内容按父元素 valueType 解释；任务级 function 参数填写白名单函数调用 generateUUID()，string 可为空且保留值的首尾空白；compute/parameter 中填写受限表达式代码；extractParam 中必须填写响应 JSON 提取表达式，例如 data[0].id，不能填写 JSON 字面值或 Python 代码。</xs:documentation>
         </xs:annotation>
       </xs:element>
     </xs:sequence>
     <xs:attribute name="valueType" type="valueType" default="string">
       <xs:annotation>
-        <xs:documentation xml:lang="zh">可选，默认 string。固定 parameter/header 中决定 value 的解析类型；compute/parameter 中约束表达式的最终结果类型；extractParam 中决定响应结果的预期类型（value 仍然是表达式）。例如提取数字 ID 时在 extractParam 上写 valueType="integer"。</xs:documentation>
+        <xs:documentation xml:lang="zh">可选，默认 string。fixed parameter/header 中决定 value 的解析类型；function 参数当前必须为 string；compute/parameter 中约束表达式的最终结果类型；extractParam 中决定响应结果的预期类型（value 仍然是表达式）。例如提取数字 ID 时在 extractParam 上写 valueType="integer"。</xs:documentation>
       </xs:annotation>
     </xs:attribute>
     <xs:attribute name="sensitive" type="xs:boolean" default="false">
@@ -144,7 +144,7 @@
       <xs:choice>
         <xs:element name="value" type="xs:string">
           <xs:annotation>
-            <xs:documentation xml:lang="zh">字段字面值，与同级 parameter 二选一。按 kv 的 valueType 解析，并校验是否符合目标接口字段 Schema。string 可为空；整个字符串若恰为 {id}，会按现有规则引用全局参数 id，不支持字符串插值拼接。</xs:documentation>
+            <xs:documentation xml:lang="zh">字段字面值，与同级 parameter 二选一。按 kv 的 valueType 解析，并校验是否符合目标接口字段 Schema。string 可为空；整个字符串若恰为 {id}，会按现有规则引用全局参数 id，动态拼接先使用 compute 的 concat/str 生成参数，再用 parameter 整体引用。</xs:documentation>
           </xs:annotation>
         </xs:element>
         <xs:element name="parameter" type="nonEmpty">
@@ -226,6 +226,7 @@
         </xs:annotation>
       </xs:element>
       <xs:element name="updateParam" type="UpdateParameter" minOccurs="0" maxOccurs="unbounded"/>
+      <xs:element name="poll" type="PollPolicy" minOccurs="0"/>
     </xs:sequence>
     <xs:attribute name="method" use="required">
       <xs:annotation>
@@ -258,9 +259,31 @@
       <xs:extension base="RestStep"/>
     </xs:complexContent>
   </xs:complexType>
+  <xs:complexType name="PollPolicy">
+    <xs:annotation><xs:documentation>显式重复当前 REST 请求，首次立即发送。每次执行 assertionCode，返回 true 即完成；未配置断言时以 HTTP 2xx 完成。仅 HTTP_STATUS_ERROR 和 ASSERTION_FAILED 继续轮询；连接错误、请求超时、断言异常和 blocked 立即终止。次数或总时长耗尽为 POLL_EXHAUSTED；只发布最后一次响应的提取结果，中间响应不更新参数。请求绑定使用进入节点时的参数快照；无隐式循环嵌套。可用于 main、parallel 和 finally，请确认重复请求的业务含义。统计沿用单个逻辑 REST 节点，记录最终响应及累计请求耗时。</xs:documentation></xs:annotation>
+    <xs:attribute name="maxAttempts" default="10"><xs:simpleType><xs:restriction base="xs:integer"><xs:minInclusive value="1"/><xs:maxInclusive value="1000"/></xs:restriction></xs:simpleType></xs:attribute>
+    <xs:attribute name="intervalMilliseconds" default="1000"><xs:simpleType><xs:restriction base="xs:integer"><xs:minInclusive value="1"/><xs:maxInclusive value="3600000"/></xs:restriction></xs:simpleType></xs:attribute>
+    <xs:attribute name="timeoutSeconds" default="60"><xs:simpleType><xs:restriction base="xs:integer"><xs:minInclusive value="1"/><xs:maxInclusive value="86400"/></xs:restriction></xs:simpleType></xs:attribute>
+  </xs:complexType>
+  <xs:complexType name="SqlStep">
+    <xs:annotation><xs:documentation>SQL 节点：支持 PostgreSQL/SQLite。每节点独立连接与事务，成功提交、失败回滚；支持 parameters/parameter 按顺序引用已可用全局参数，重复名称可重复绑定；PostgreSQL 使用 %s，SQLite 使用 ? 占位符，由驱动绑定值，不拼接 SQL，不绑定表名或列名。参数仅支持标量或 null，不提取结果、不计入 HTTP 统计。statement 为一条 SQL，建议 CDATA；不包含 BEGIN/COMMIT 等事务控制。PostgreSQL datasource 为 libpq 连接串或 URI，用户名密码可单独配置；SQLite 为文件路径且不支持用户名密码。凭据随任务配置保存，请限制任务访问权限。可用于 main、parallel 和 finally。</xs:documentation></xs:annotation>
+    <xs:sequence>
+      <xs:element name="datasource" type="nonEmpty"/>
+      <xs:element name="username" type="xs:string" minOccurs="0"/>
+      <xs:element name="password" type="xs:string" minOccurs="0"/>
+      <xs:element name="statement" type="nonEmpty"/>
+      <xs:element name="parameters" minOccurs="0">
+        <xs:complexType><xs:sequence>
+          <xs:element name="parameter" type="nonEmpty" minOccurs="0" maxOccurs="100"/>
+        </xs:sequence></xs:complexType>
+      </xs:element>
+    </xs:sequence>
+    <xs:attribute name="driver" use="required"><xs:simpleType><xs:restriction base="xs:string"><xs:enumeration value="postgresql"/><xs:enumeration value="sqlite"/></xs:restriction></xs:simpleType></xs:attribute>
+    <xs:attribute name="timeoutSeconds" default="30"><xs:simpleType><xs:restriction base="xs:integer"><xs:minInclusive value="1"/><xs:maxInclusive value="300"/></xs:restriction></xs:simpleType></xs:attribute>
+  </xs:complexType>
   <xs:complexType name="ComputeStep">
     <xs:annotation>
-      <xs:documentation>运行时受限表达式参数节点，不发 HTTP。每次执行时捕获一个 now；所有参数表达式读取同一节点前快照，不互相依赖，全部成功后原子发布。默认 timezone=Asia/Shanghai，可指定 IANA 时区。参数 value 是受限表达式，日期/时刻须显式格式化为 string；例如 http_date(add_seconds(now(), 3600))。无效日期、空依赖、类型不匹配或计算失败使节点失败，不以 null 冒充计算结果；仍尝试 finally。</xs:documentation>
+      <xs:documentation>运行时受限表达式参数节点，不发 HTTP。每次执行时捕获一个 now；所有参数表达式读取同一节点前快照，不互相依赖，全部成功后原子发布。默认 timezone=Asia/Shanghai，可指定 IANA 时区。参数 value 是受限表达式，日期/时刻须显式格式化为 string；例如 http_date(add_seconds(now(), 3600))；concat("prefix-", str(param("id"))) 支持字符串拼接；concat 接受 1～100 个 string，str 显式将标量转字符串（boolean 为 true/false），不接受 null 或对象数组，结果最多 65536 字符；支持无参 generateUUID() 生成 UUID v4 字符串，每次调用独立生成。若多个 step 需要共享，应在首个 compute 中生成一次再引用同名参数，或使用任务级 parameters 内的 generateUUID() 初始化。无效日期、空依赖、类型不匹配或计算失败使节点失败，不以 null 冒充计算结果；仍尝试 finally。</xs:documentation>
     </xs:annotation>
     <xs:sequence>
       <xs:element name="parameter" type="pair" minOccurs="1" maxOccurs="100">
@@ -273,7 +296,7 @@
   </xs:complexType>
   <xs:complexType name="WaitStep">
     <xs:annotation>
-      <xs:documentation xml:lang="zh">固定 milliseconds 与动态 parameter 二选一。动态 mode=duration（默认）表示相对时长，until 表示绝对到期时刻；unit 默认 seconds，可为 milliseconds 或（until 专用）带时区 iso8601。可加 offsetParameter（默认 seconds，可指定 offsetUnit=milliseconds）及 offsetMilliseconds，计算 base+offset-now；过去时刻立即完成，单次最多 30 天。动态值无效时 WAIT_VALUE_INVALID，不猜测时长；不支持请求轮询循环。</xs:documentation>
+      <xs:documentation xml:lang="zh">固定 milliseconds 与动态 parameter 二选一。动态 mode=duration（默认）表示相对时长，until 表示绝对到期时刻；unit 默认 seconds，可为 milliseconds 或（until 专用）带时区 iso8601。可加 offsetParameter（默认 seconds，可指定 offsetUnit=milliseconds）及 offsetMilliseconds，计算 base+offset-now；过去时刻立即完成，单次最多 30 天。动态值无效时 WAIT_VALUE_INVALID，不猜测时长；请求轮询通过 rest/poll 显式配置。</xs:documentation>
     </xs:annotation>
     <xs:attribute name="milliseconds" type="Milliseconds" use="optional">
       <xs:annotation>
@@ -289,7 +312,7 @@
   </xs:complexType>
   <xs:complexType name="ParallelStep">
     <xs:annotation>
-      <xs:documentation xml:lang="zh">单层并发屏障，至少两个 rest/wait/compute 子节点；非法：嵌套 parallel。失败时停止领取新节点，已启动节点收尾后发布已赋参数（含 null），失败不阻止发布；仅父节点展示汇总。</xs:documentation>
+      <xs:documentation xml:lang="zh">单层并发屏障，至少两个 rest/wait/compute/sql 子节点；非法：嵌套 parallel。失败时停止领取新节点，已启动节点收尾后发布已赋参数（含 null），失败不阻止发布；仅父节点展示汇总。</xs:documentation>
     </xs:annotation>
     <xs:sequence>
       <xs:element name="taskStep" type="LeafTaskStep" minOccurs="2" maxOccurs="unbounded">
@@ -306,7 +329,7 @@
   </xs:complexType>
   <xs:complexType name="MainTaskStep">
     <xs:annotation>
-      <xs:documentation xml:lang="zh">恰好一个 rest/wait/compute/parallel；order 同父容器唯一，正 int32。清理不能并发，清理 REST 可以提取参数供后续清理引用。</xs:documentation>
+      <xs:documentation xml:lang="zh">恰好一个 rest/wait/compute/sql/parallel；order 同父容器唯一，正 int32。清理不能并发，清理 REST 可以提取参数供后续清理引用。</xs:documentation>
     </xs:annotation>
     <xs:choice>
       <xs:element name="rest" type="RestStep">
@@ -332,6 +355,7 @@
         </xs:unique>
       </xs:element>
       <xs:element name="compute" type="ComputeStep"/>
+      <xs:element name="sql" type="SqlStep"/>
     </xs:choice>
     <xs:attribute name="order" type="Position" use="required">
       <xs:annotation>
@@ -361,7 +385,7 @@
   </xs:complexType>
   <xs:complexType name="LeafTaskStep">
     <xs:annotation>
-      <xs:documentation xml:lang="zh">恰好一个 rest/wait/compute；order 同父容器唯一，正 int32。清理不能并发，清理 REST 可以提取参数供后续清理引用。</xs:documentation>
+      <xs:documentation xml:lang="zh">恰好一个 rest/wait/compute/sql；order 同父容器唯一，正 int32。清理不能并发，清理 REST 可以提取参数供后续清理引用。</xs:documentation>
     </xs:annotation>
     <xs:choice>
       <xs:element name="rest" type="RestStep">
@@ -375,6 +399,7 @@
         </xs:annotation>
       </xs:element>
       <xs:element name="compute" type="ComputeStep"/>
+      <xs:element name="sql" type="SqlStep"/>
     </xs:choice>
     <xs:attribute name="order" type="Position" use="required">
       <xs:annotation>
@@ -404,7 +429,7 @@
   </xs:complexType>
   <xs:complexType name="CleanupTaskStep">
     <xs:annotation>
-      <xs:documentation xml:lang="zh">恰好一个 rest/wait/compute；order 同父容器唯一，正 int32。清理不能并发，清理 REST 可以提取参数供后续清理引用。</xs:documentation>
+      <xs:documentation xml:lang="zh">恰好一个 rest/wait/compute/sql；order 同父容器唯一，正 int32。清理不能并发，清理 REST 可以提取参数供后续清理引用。</xs:documentation>
     </xs:annotation>
     <xs:choice>
       <xs:element name="rest" type="CleanupRestStep">
@@ -418,6 +443,7 @@
         </xs:annotation>
       </xs:element>
       <xs:element name="compute" type="ComputeStep"/>
+      <xs:element name="sql" type="SqlStep"/>
     </xs:choice>
     <xs:attribute name="order" type="Position" use="required">
       <xs:annotation>
@@ -453,21 +479,27 @@
       <xs:sequence>
         <xs:element name="parameters" minOccurs="0">
           <xs:annotation>
-            <xs:documentation xml:lang="zh">可选的固定全局参数容器，只能出现一次，必须位于所有 taskStep 之前。可省略或留空；其中所有固定参数在执行第一个步骤前初始化，不按声明顺序发起请求。响应提取参数请在对应 rest 的 extractParam 中声明。</xs:documentation>
+            <xs:documentation xml:lang="zh">可选的全局参数容器，只能出现一次，必须位于所有 taskStep 之前。type="fixed" 始终按字面量处理，即使 value 为 generateUUID() 也不执行。type="function" 显式调用白名单内置函数，目前仅支持 valueType="string" 且 value 完整填写 generateUUID()（区分大小写、无参数、无额外空白）。在每次 task 执行初始化时生成标准带连字符 UUID v4 字符串，同次执行内多个 taskStep（含并发及 finally）引用同名参数共享结果；不同 task、同一 task 重新执行分别生成。导入、保存、复制、排队均保留函数文本，不提前求值；预览独立生成，不复用正式执行结果。不同参数声明分别生成。示例：&lt;parameter type="function" valueType="string"&gt;&lt;name&gt;task_uuid&lt;/name&gt;&lt;value&gt;generateUUID()&lt;/value&gt;&lt;/parameter&gt;；后续用 &lt;parameter&gt;task_uuid&lt;/parameter&gt; 引用。禁止任意代码、未知函数及函数参数；object/array 嵌套文本不执行。响应提取参数在对应 rest 的 extractParam 中声明。</xs:documentation>
           </xs:annotation>
           <xs:complexType>
             <xs:sequence>
               <xs:element name="parameter" minOccurs="0" maxOccurs="unbounded">
                 <xs:annotation>
-                  <xs:documentation xml:lang="zh">固定全局参数，可重复声明不同名字。例如 &lt;parameter type="fixed" valueType="integer"&gt;&lt;name&gt;id&lt;/name&gt;&lt;value&gt;42&lt;/value&gt;&lt;/parameter&gt;。后续 kv 可通过 parameter 子元素引用；字面值恰为 {参数名} 时也会按现有绑定规则引用全局参数。</xs:documentation>
+                  <xs:documentation xml:lang="zh">全局参数（fixed 字面量或 function 内置函数），可重复声明不同名字。例如 &lt;parameter type="fixed" valueType="integer"&gt;&lt;name&gt;id&lt;/name&gt;&lt;value&gt;42&lt;/value&gt;&lt;/parameter&gt;。后续 kv 可通过 parameter 子元素引用；字面值恰为 {参数名} 时也会按现有绑定规则引用全局参数。</xs:documentation>
                 </xs:annotation>
                 <xs:complexType>
                   <xs:complexContent>
                     <xs:extension base="pair">
-                      <xs:attribute name="type" use="required" fixed="fixed" type="xs:string">
+                      <xs:attribute name="type" use="required">
                         <xs:annotation>
-                          <xs:documentation xml:lang="zh">必填且只能为 fixed，表示固定来源；这里不是值类型。值类型请用 valueType，响应来源请用 extractParam，不能写 type="rest"。</xs:documentation>
+                          <xs:documentation xml:lang="zh">必填：fixed 表示字面量，function 表示执行白名单内置函数。值类型使用 valueType；响应来源使用 extractParam。</xs:documentation>
                         </xs:annotation>
+                        <xs:simpleType>
+                          <xs:restriction base="xs:string">
+                            <xs:enumeration value="fixed"/>
+                            <xs:enumeration value="function"/>
+                          </xs:restriction>
+                        </xs:simpleType>
                       </xs:attribute>
                     </xs:extension>
                   </xs:complexContent>
@@ -483,7 +515,7 @@
         </xs:element>
         <xs:element name="finally" minOccurs="0">
           <xs:annotation>
-            <xs:documentation xml:lang="zh">可选且最多一次，至少一个 rest/wait/compute；不允许 parallel；清理 REST 可声明 extractParam。无论 main 成功或失败，进程正常时按顺序尝试全部清理，单步失败不阻断后续清理。</xs:documentation>
+            <xs:documentation xml:lang="zh">可选且最多一次，至少一个 rest/wait/compute/sql；不允许 parallel；清理 REST 可声明 extractParam。无论 main 成功或失败，进程正常时按顺序尝试全部清理，单步失败不阻断后续清理。</xs:documentation>
           </xs:annotation>
           <xs:complexType>
             <xs:sequence>

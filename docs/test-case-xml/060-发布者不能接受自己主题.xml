@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<task name="060-发布者不能接受自己主题">
+  <parameters>
+    <parameter type="function" valueType="string"><name>run</name><value>generateUUID()</value></parameter>
+    <parameter type="fixed" valueType="string"><name>code</name><value>123456</value></parameter>
+  </parameters>
+  <taskStep order="10">
+    <rest method="GET" path="/communities">
+      <auth mode="none"/>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    data = responseBody.get("data")
+    if not isinstance(data, list) or len(data) == 0:
+        raise Blocked("no community available")
+    return statusCode == 200 and responseBody.get("code") == 0 and all(item.get("id") and item.get("name") for item in data) and bool(responseBody.get("requestId"))
+]]></assertionCode>
+      <extractParam valueType="string"><name>c1</name><value>data[0].id</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="20">
+    <compute>
+      <parameter valueType="string"><name>a_email</name><value>concat("tc-", param("run"), "-a@example.com")</value></parameter>
+      <parameter valueType="string"><name>title</name><value>concat("测试-", param("run"))</value></parameter>
+    </compute>
+  </taskStep>
+  <taskStep order="30">
+    <rest method="POST" path="/auth/register">
+      <header><name>Content-Type</name><value>application/json</value></header>
+      <auth mode="none"/>
+      <body>
+        <kv><key>identityType</key><value>email</value></kv>
+        <kv><key>identityValue</key><parameter>a_email</parameter></kv>
+        <kv><key>code</key><parameter>code</parameter></kv>
+        <kv><key>nickname</key><value>测060甲</value></kv>
+        <kv><key>communityId</key><parameter>c1</parameter></kv>
+      </body>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    data = responseBody.get("data") or {}
+    return statusCode == 200 and responseBody.get("code") == 0 and bool(data.get("accessToken")) and bool(data.get("refreshToken")) and bool((data.get("user") or {}).get("id")) and bool(responseBody.get("requestId"))
+]]></assertionCode>
+      <extractParam valueType="string"><name>a_id</name><value>data.user.id</value></extractParam>
+      <extractParam valueType="string"><name>a_access</name><value>data.accessToken</value></extractParam>
+      <extractParam valueType="string"><name>a_refresh</name><value>data.refreshToken</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="40">
+    <rest method="POST" path="/topics">
+      <header><name>Content-Type</name><value>application/json</value></header>
+      <auth mode="bearer" parameter="a_access"/>
+      <body>
+        <kv><key>title</key><parameter>title</parameter></kv>
+        <kv><key>detail</key><value>独立接口验收</value></kv>
+        <kv valueType="array"><key>genders</key><value>[]</value></kv>
+      </body>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    data = responseBody.get("data") or {}
+    return statusCode == 200 and responseBody.get("code") == 0 and bool(data.get("id")) and data.get("publisherId") == globalParam.get("a_id") and data.get("communityId") == globalParam.get("c1") and data.get("status") == "open" and bool(responseBody.get("requestId"))
+]]></assertionCode>
+      <extractParam valueType="string"><name>t</name><value>data.id</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="50">
+    <rest method="POST" path="/topics/{topicId}/accept">
+      <auth mode="bearer" parameter="a_access"/>
+      <pathParams>
+        <kv><key>topicId</key><parameter>t</parameter></kv>
+      </pathParams>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    msg = responseBody.get("message") or ""
+    return 400 <= statusCode < 500 and responseBody.get("code") != 0 and "Exception" not in msg and "SQL" not in msg and "Traceback" not in msg
+]]></assertionCode>
+      <extractParam valueType="string"><name>r</name><value>data.roomId</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="60">
+    <rest method="GET" path="/rooms">
+      <auth mode="bearer" parameter="a_access"/>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    data = responseBody.get("data") or {}
+    items = data.get("items")
+    if not isinstance(items, list):
+        return False
+    return statusCode == 200 and responseBody.get("code") == 0 and all(room.get("topicId") != globalParam.get("t") for room in items) and bool(responseBody.get("requestId"))
+]]></assertionCode>
+    </rest>
+  </taskStep>
+  <finally>
+    <taskStep order="10" ifParameter="a_access">
+      <rest method="DELETE" path="/me">
+        <auth mode="bearer" parameter="a_access"/>
+        <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    return statusCode == 200 and responseBody is not None and responseBody.get("code") == 0 and isinstance(responseBody.get("data"), dict) and bool(responseBody.get("requestId"))
+]]></assertionCode>
+      </rest>
+    </taskStep>
+    <taskStep order="20" ifParameter="a_access">
+      <rest method="GET" path="/me">
+        <auth mode="bearer" parameter="a_access"/>
+        <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    return statusCode == 401 and responseBody is not None and responseBody.get("code") == 40101
+]]></assertionCode>
+      </rest>
+    </taskStep>
+    <taskStep order="30" ifParameter="r">
+      <sql driver="postgresql">
+        <datasource>jdbc:postgresql://127.0.0.1:5432/part_service_db</datasource>
+        <username>part_service</username>
+        <password>Changeme_123</password>
+        <statement><![CDATA[DELETE FROM chat_room WHERE id=%s]]></statement>
+        <parameters><parameter>r</parameter></parameters>
+      </sql>
+    </taskStep>
+  </finally>
+</task>

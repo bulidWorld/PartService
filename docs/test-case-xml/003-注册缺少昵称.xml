@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<task name="003-注册缺少昵称">
+  <taskStep order="10">
+    <rest method="GET" path="/communities">
+      <auth mode="none"/>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    data = responseBody.get("data")
+    if not isinstance(data, list) or len(data) == 0:
+        raise Blocked("no community available")
+    return statusCode == 200 and responseBody.get("code") == 0 and all(item.get("id") and item.get("name") for item in data) and bool(responseBody.get("requestId"))
+]]></assertionCode>
+      <extractParam valueType="string"><name>c1</name><value>data[0].id</value></extractParam>
+    </rest>
+  </taskStep>
+  <taskStep order="20">
+    <rest method="POST" path="/auth/register">
+      <header><name>Content-Type</name><value>application/json</value></header>
+      <auth mode="none"/>
+      <rawBody><![CDATA[{"identityType":"email","identityValue":"tc-003-bad@example.com","code":"123456","communityId":"00000000-0000-0000-0000-000000000000"}]]></rawBody>
+      <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    if responseBody is None:
+        return False
+    return statusCode == 400 and responseBody.get("code") == 40001
+]]></assertionCode>
+      <extractParam valueType="string"><name>b_id</name><value>data.user.id</value></extractParam>
+      <extractParam valueType="string"><name>b_access</name><value>data.accessToken</value></extractParam>
+      <extractParam valueType="string"><name>b_refresh</name><value>data.refreshToken</value></extractParam>
+    </rest>
+  </taskStep>
+  <finally>
+    <taskStep order="10" ifParameter="b_access">
+      <rest method="DELETE" path="/me">
+        <auth mode="bearer" parameter="b_access"/>
+        <assertionCode><![CDATA[
+def assert_response(responseBody, globalParam, statusCode, headers):
+    return statusCode == 200 and responseBody is not None and responseBody.get("code") == 0 and isinstance(responseBody.get("data"), dict)
+]]></assertionCode>
+      </rest>
+    </taskStep>
+  </finally>
+</task>
