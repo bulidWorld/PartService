@@ -133,11 +133,10 @@ components:
       anyOf:
       - required: [code]
       - required: [password]
-      description: code 与 password 必须且只能提供一个；identityType 支持 email 或 phone
+      description: LoginRequest字段。identityType 支持 email 或 phone；code 与 password 必须且只能提供一个。
       properties:
         identityType:
           type: string
-          enum: [email, phone]
           description: 身份类型（email 或 phone）
         identityValue:
           type: string
@@ -153,7 +152,6 @@ components:
         deviceId:
           type: string
           description: 设备标识
-      description: LoginRequest字段
     RefreshRequest:
       type: object
       required:

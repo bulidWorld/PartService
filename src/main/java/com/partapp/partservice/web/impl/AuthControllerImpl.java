@@ -12,6 +12,7 @@ import com.partapp.partservice.persistence.repository.GlobalDictionaryRepository
 import com.partapp.partservice.persistence.repository.UserRepository;
 import com.partapp.partservice.persistence.repository.UserRepository.TokenPair;
 import com.partapp.partservice.persistence.repository.UserRepository.User;
+import com.partapp.partservice.security.PasswordHasher;
 import com.partapp.partservice.web.ApiException;
 import com.partapp.partservice.web.generated.api.AuthApiDelegate;
 import com.partapp.partservice.web.generated.model.*;
@@ -46,6 +47,13 @@ class AuthControllerImpl implements AuthApiDelegate {
   }
 
   public TokenPair register(Requests.Register r) {
+    validateIdentityType(r.identityType());
+    String passwordHash;
+    try {
+      passwordHash = PasswordHasher.hash(r.password());
+    } catch (IllegalArgumentException e) {
+      throw ApiException.bad(e.getMessage());
+    }
     if (dictionaryRepo.isRegisterCodeVerificationEnabled())
       userRepo.verifyCode(r.identityType(), r.identityValue(), r.code(), "register");
     String key = userRepo.identityKey(r.identityType(), r.identityValue());
@@ -53,23 +61,51 @@ class AuthControllerImpl implements AuthApiDelegate {
       throw ApiException.conflict("身份已注册");
     User u = new User(UUID.randomUUID(), r.nickname(), r.communityId(), null, null, null, "active", Instant.now());
     userRepo.insert(u.id(), u.nickname(), u.communityId(), r.identityType(),
-        r.identityValue().trim().toLowerCase());
+        r.identityValue().trim().toLowerCase(), passwordHash);
     userRepo.putUser(u.id(), u);
     userRepo.putIdentity(key, u.id());
     return userRepo.issue(u);
   }
 
   public TokenPair login(Requests.Login r) {
-    userRepo.verifyCode(r.identityType(), r.identityValue(), r.code(), "login");
+    validateIdentityType(r.identityType());
+    boolean codeLogin = r.code() != null && !r.code().isBlank();
+    boolean passwordLogin = r.password() != null && !r.password().isBlank();
+    if (codeLogin == passwordLogin)
+      throw ApiException.bad("验证码和密码必须且只能填写一个");
+    if (codeLogin)
+      userRepo.verifyCode(r.identityType(), r.identityValue(), r.code(), "login");
     String identity = userRepo.identityKey(r.identityType(), r.identityValue());
     UUID id = userRepo.getIdentity(identity);
     if (id == null)
       id = userRepo.findIdByIdentity(r.identityType(), r.identityValue().trim().toLowerCase()).orElse(null);
     if (id == null)
-      throw ApiException.unauthorized("身份未注册");
+      throw ApiException.unauthorized("身份或密码错误");
+    if (passwordLogin) {
+      String passwordHash = userRepo.findPasswordHash(id).orElse(null);
+      if (!PasswordHasher.matches(r.password(), passwordHash))
+        throw ApiException.unauthorized("身份或密码错误");
+    }
     User u = userRepo.active(id);
     userRepo.putIdentity(identity, id);
     return userRepo.issue(u);
+  }
+
+  public void changePassword(Requests.ChangePassword r) {
+    if (r.newPassword() == null || r.newPassword().isBlank() || r.newPassword().length() < 8
+        || r.newPassword().length() > 72)
+      throw ApiException.bad("新密码长度必须为 8 至 72 个字符");
+    UUID userId = userRepo.authenticate(authorization());
+    userRepo.active(userId);
+    String passwordHash = userRepo.findPasswordHash(userId).orElse(null);
+    if (!PasswordHasher.matches(r.currentPassword(), passwordHash))
+      throw ApiException.unauthorized("当前密码错误");
+    userRepo.updatePasswordHash(userId, PasswordHasher.hash(r.newPassword()));
+  }
+
+  private void validateIdentityType(String identityType) {
+    if (!"email".equals(identityType) && !"phone".equals(identityType))
+      throw ApiException.bad("identity_type 不支持");
   }
 
   public TokenPair refresh(String token) {
@@ -93,8 +129,8 @@ class AuthControllerImpl implements AuthApiDelegate {
   public ResponseEntity<ApiResponseTokenPair> register(RegisterRequest x) {
     return ResponseEntity.ok(new ApiResponseTokenPair(0, "ok",
         ApiModelMapper.tokenPair(
-            register(new Requests.Register(x.getIdentityType(), x.getIdentityValue(), x.getCode(), x.getNickname(),
-                x.getCommunityId()))),
+            register(new Requests.Register(x.getIdentityType(), x.getIdentityValue(), x.getCode(), x.getPassword(),
+                x.getNickname(), x.getCommunityId()))),
         requestId()));
   }
 
@@ -102,8 +138,15 @@ class AuthControllerImpl implements AuthApiDelegate {
   public ResponseEntity<ApiResponseTokenPair> login(LoginRequest x) {
     return ResponseEntity.ok(new ApiResponseTokenPair(0, "ok",
         ApiModelMapper.tokenPair(
-            login(new Requests.Login(x.getIdentityType(), x.getIdentityValue(), x.getCode(), x.getDeviceId()))),
+            login(new Requests.Login(x.getIdentityType(), x.getIdentityValue(), x.getCode(), x.getPassword(),
+                x.getDeviceId()))),
         requestId()));
+  }
+
+  @Override
+  public ResponseEntity<ApiResponseEmpty> changePassword(ChangePasswordRequest x) {
+    changePassword(new Requests.ChangePassword(x.getCurrentPassword(), x.getNewPassword()));
+    return ResponseEntity.ok(new ApiResponseEmpty(0, "ok", Map.of(), requestId()));
   }
 
   @Override

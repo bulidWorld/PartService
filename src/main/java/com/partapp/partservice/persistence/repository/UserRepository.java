@@ -97,11 +97,13 @@ public class UserRepository {
     return Optional.ofNullable(e).map(x -> x.userId);
   }
 
-  public void insert(UUID id, String nickname, UUID communityId, String identityType, String identityValue) {
+  public void insert(UUID id, String nickname, UUID communityId, String identityType, String identityValue,
+      String passwordHash) {
     UserEntity u = new UserEntity();
     u.id = id;
     u.nickname = nickname;
     u.communityId = communityId;
+    u.passwordHash = passwordHash;
     userMapper.insert(u);
     UserIdentityEntity i = new UserIdentityEntity();
     i.id = UUID.randomUUID();
@@ -110,6 +112,18 @@ public class UserRepository {
     i.identityValue = identityValue;
     i.primary = true;
     identityMapper.insert(i);
+  }
+
+  public Optional<String> findPasswordHash(UUID userId) {
+    UserEntity user = userMapper.selectById(userId);
+    return Optional.ofNullable(user).map(u -> u.passwordHash);
+  }
+
+  public void updatePasswordHash(UUID userId, String passwordHash) {
+    UserEntity user = new UserEntity();
+    user.id = userId;
+    user.passwordHash = passwordHash;
+    userMapper.updateById(user);
   }
 
   public void update(User u) {

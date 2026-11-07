@@ -9,6 +9,8 @@ public class UserEntity {
     @TableId(type = IdType.INPUT)
     public UUID id;
     public String nickname;
+    @TableField("password_hash")
+    public String passwordHash;
     @TableField(value = "community_id", updateStrategy = FieldStrategy.ALWAYS)
     public UUID communityId;
     @TableField(updateStrategy = FieldStrategy.ALWAYS)

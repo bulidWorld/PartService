@@ -16,11 +16,15 @@ public final class Requests {
   }
 
   public record Register(@NotBlank String identityType, @NotBlank String identityValue, String code,
-      @NotBlank @Size(max = 32) String nickname, @NotNull UUID communityId) {
+      @NotBlank @Size(min = 8, max = 72) String password, @NotBlank @Size(max = 32) String nickname,
+      @NotNull UUID communityId) {
   }
 
-  public record Login(@NotBlank String identityType, @NotBlank String identityValue, @NotBlank String code,
+  public record Login(@NotBlank String identityType, @NotBlank String identityValue, String code, String password,
       String deviceId) {
+  }
+
+  public record ChangePassword(@NotBlank String currentPassword, @NotBlank @Size(min = 8, max = 72) String newPassword) {
   }
 
   public record Refresh(@NotBlank String refreshToken) {
