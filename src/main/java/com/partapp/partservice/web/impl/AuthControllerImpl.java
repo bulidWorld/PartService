@@ -48,11 +48,13 @@ class AuthControllerImpl implements AuthApiDelegate {
 
   public TokenPair register(Requests.Register r) {
     validateIdentityType(r.identityType());
-    String passwordHash;
-    try {
-      passwordHash = PasswordHasher.hash(r.password());
-    } catch (IllegalArgumentException e) {
-      throw ApiException.bad(e.getMessage());
+    String passwordHash = null;
+    if (r.password() != null) {
+      try {
+        passwordHash = PasswordHasher.hash(r.password());
+      } catch (IllegalArgumentException e) {
+        throw ApiException.bad(e.getMessage());
+      }
     }
     if (dictionaryRepo.isRegisterCodeVerificationEnabled())
       userRepo.verifyCode(r.identityType(), r.identityValue(), r.code(), "register");

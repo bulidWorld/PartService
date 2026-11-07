@@ -16,7 +16,7 @@ public final class Requests {
   }
 
   public record Register(@NotBlank String identityType, @NotBlank String identityValue, String code,
-      @NotBlank @Size(min = 8, max = 72) String password, @NotBlank @Size(max = 32) String nickname,
+      @Size(min = 8, max = 72) String password, @NotBlank @Size(max = 32) String nickname,
       @NotNull UUID communityId) {
   }
 
