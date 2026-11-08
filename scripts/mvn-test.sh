@@ -1,0 +1,1 @@
+mvn -s maven_settings.xml test

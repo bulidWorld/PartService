@@ -2,8 +2,9 @@ FROM maven:3.9-eclipse-temurin-25 AS build
 
 WORKDIR /build
 COPY pom.xml .
+COPY maven_settings.xml ./maven_settings.xml
 COPY src ./src
-RUN mvn package -DskipTests
+RUN mvn -s ./maven_settings.xml package -Dmaven.test.skip=true
 
 FROM eclipse-temurin:25-jre
 

@@ -64,7 +64,7 @@ class AuthRegistrationTest {
     assertEquals(0, response.getCode());
     verify(users, never()).verifyCode(anyString(), anyString(), nullable(String.class), anyString());
     verify(users).insert(any(UUID.class), eq("test"), eq(request.getCommunityId()),
-        eq("email"), eq("user@example.com"));
+        eq("email"), eq("user@example.com"), isNull());
   }
 
   @Test
@@ -75,7 +75,8 @@ class AuthRegistrationTest {
 
     var order = inOrder(users);
     order.verify(users).verifyCode("email", "user@example.com", "123456", "register");
-    order.verify(users).insert(any(UUID.class), eq("test"), any(UUID.class), eq("email"), eq("user@example.com"));
+    order.verify(users).insert(any(UUID.class), eq("test"), any(UUID.class), eq("email"), eq("user@example.com"),
+        isNull());
   }
 
   @ParameterizedTest
@@ -87,7 +88,7 @@ class AuthRegistrationTest {
 
     assertThrows(ApiException.class, () -> controller.register(request(code)));
 
-    verify(users, never()).insert(any(), any(), any(), any(), any());
+    verify(users, never()).insert(any(), any(), any(), any(), any(), any());
   }
 
   @ParameterizedTest
@@ -101,7 +102,7 @@ class AuthRegistrationTest {
 
     assertThrows(ApiException.class, () -> controller.register(request(null)));
 
-    verify(users, never()).insert(any(), any(), any(), any(), any());
+    verify(users, never()).insert(any(), any(), any(), any(), any(), any());
   }
 
   @Test

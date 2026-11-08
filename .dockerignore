@@ -1,5 +1,6 @@
 **
 !pom.xml
+!maven_settings.xml
 !src/
 !src/**
 !Dockerfile
