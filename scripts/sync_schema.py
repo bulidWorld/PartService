@@ -5,7 +5,7 @@ Requires psycopg (v3) or psycopg2. Existing objects are safe because the XML
 statements are idempotent; a checksum ledger prevents rerunning unchanged SQL.
 """
 from __future__ import annotations
-import argparse, hashlib, os, re, sys
+import argparse, hashlib, os, re
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
@@ -107,21 +107,24 @@ def quote_literal(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 def connect():
-    url = os.getenv("DB_URL", "postgresql://127.0.0.1:5432/part_service_db")
-    if url.startswith("jdbc:"):
-        url = url[5:]
+    names = ("DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD")
+    missing = [name for name in names if name not in os.environ]
+    if missing:
+        raise ValueError(f"Missing database environment variables: {', '.join(missing)}")
     kwargs = {
-        "dbname": os.getenv("DB_NAME", "part_service_db"),
-        "user": os.getenv("DB_USER", "part_service"),
-        "password": os.getenv("DB_PASSWORD", "Changeme_123"),
+        "host": os.environ["DB_HOST"],
+        "port": os.environ["DB_PORT"],
+        "dbname": os.environ["DB_NAME"],
+        "user": os.environ["DB_USER"],
+        "password": os.environ["DB_PASSWORD"],
     }
     try:
         import psycopg
-        return psycopg.connect(url, **kwargs, autocommit=False)
+        return psycopg.connect(**kwargs, autocommit=False)
     except ImportError:
         try:
             import psycopg2
-            return psycopg2.connect(url, **kwargs)
+            return psycopg2.connect(**kwargs)
         except ImportError as exc:
             raise SystemExit("Install psycopg (pip install 'psycopg[binary]') or psycopg2-binary") from exc
 

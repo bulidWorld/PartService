@@ -4,3 +4,6 @@
 !src/
 !src/**
 !Dockerfile
+!scripts/
+!scripts/requirements.txt
+!scripts/sync_schema.py

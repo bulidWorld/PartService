@@ -66,7 +66,7 @@ class AccountDeletionIntegrationTest {
     }
     UUID id = UUID.randomUUID();
     String email = id + "@example.com";
-    users.insert(id, label, community, "email", email);
+    users.insert(id, label, community, "email", email, null);
     User user = new User(id, label, community, null, null, null, "active", Instant.now());
     users.putUser(id, user);
     users.putIdentity(users.identityKey("email", email), id);
